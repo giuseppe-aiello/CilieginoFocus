@@ -5,8 +5,8 @@ import Auth from './Auth';
 const POMODORO_SECONDS = 1500;
 
 // Motore logico della Mascotte (basato esclusivamente sui dati della stanza)
-const getMascotStage = (roomMinutes) => {
-  const xp = roomMinutes; // 1 minuto di focus nella stanza = 1 XP
+const getMascotStage = (roomSeconds) => {
+  const xp = Math.floor(roomSeconds / 60); // 60 secondi di focus nella stanza = 1 XP
   
   const stages = [
     { minXp: 0, name: 'Seme Dormiente', visual: '🟤', color: 'text-amber-700' },
@@ -51,7 +51,7 @@ const getMascotStage = (roomMinutes) => {
 
 function App() {
   const [session, setSession] = useState(null);
-  
+
   const [rooms, setRooms] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
   const [newRoomName, setNewRoomName] = useState('');
@@ -59,73 +59,115 @@ function App() {
 
   const [onlineUsers, setOnlineUsers] = useState([]);
 
-  // Nuovi stati per modalità e gestione tempo personalizzato
-  const [customMinutes, setCustomMinutes] = useState(25);
-
-  const [timeLeft, setTimeLeft] = useState(1500);
+  // Nuovi stati per la logica a timestamp assoluto
+  const [timeLeft, setTimeLeft] = useState(1500); // Variabile puramente visiva
   const [isRunning, setIsRunning] = useState(false);
+  const [targetEndTime, setTargetEndTime] = useState(null);
+  const [pausedRemainingSec, setPausedRemainingSec] = useState(1500);
+
   const [mode, setMode] = useState('study'); // 'study' o 'break'
-  const [roomSettings, setRoomSettings] = useState({ studyDuration: 25, breakDuration: 5, autoSwitch: false });
+
+  // Impostazioni e statistiche ora ragionano nativamente in secondi
+  const [roomSettings, setRoomSettings] = useState({ studyDurationSec: 1500, breakDurationSec: 300, autoSwitch: false });
   const [showSettings, setShowSettings] = useState(false);
 
-  const [personalStats, setPersonalStats] = useState({ pomodoros: 0, totalMinutes: 0 });
-  const [roomStats, setRoomStats] = useState({ pomodoros: 0, totalMinutes: 0 });
-  const [globalStats, setGlobalStats] = useState({ pomodoros: 0, totalMinutes: 0 });
+  const [personalStats, setPersonalStats] = useState({ pomodoros: 0, totalSeconds: 0 });
+  const [roomStats, setRoomStats] = useState({ pomodoros: 0, totalSeconds: 0 });
+  const [globalStats, setGlobalStats] = useState({ pomodoros: 0, totalSeconds: 0 });
 
-  const updateRoomTimer = async (seconds, running, currentMode) => {
-    if (!currentRoom) return;
-    await supabase.from('pomodoro_sessions').update({
-      seconds_left: seconds,
-      is_running: running,
-      mode: currentMode,
-      last_updated_at: new Date()
-    }).eq('room_name', currentRoom);
-  };
-  
   const applyAndSaveSettings = async () => {
-    let newTime = timeLeft;
+    let newRemaining = pausedRemainingSec;
 
-    // Se il timer è FERMO, calcola e applica subito il nuovo tempo
     if (!isRunning) {
-      newTime = mode === 'study' ? roomSettings.studyDuration * 60 : roomSettings.breakDuration * 60;
-      setTimeLeft(newTime);
+      newRemaining = mode === 'study' ? roomSettings.studyDurationSec : roomSettings.breakDurationSec;
+      setPausedRemainingSec(newRemaining);
+      setTimeLeft(newRemaining);
     }
 
-    // Invia i dati a Supabase UNA SOLA VOLTA. 
-    // Questo aggiornerà istantaneamente lo schermo di tutti gli utenti connessi!
     await supabase.from('pomodoro_sessions').update({
-      study_duration: roomSettings.studyDuration,
-      break_duration: roomSettings.breakDuration,
+      study_duration_sec: roomSettings.studyDurationSec,
+      break_duration_sec: roomSettings.breakDurationSec,
       auto_switch: roomSettings.autoSwitch,
-      seconds_left: newTime,
+      paused_remaining_sec: newRemaining,
       last_updated_at: new Date()
     }).eq('room_name', currentRoom);
 
-    // Chiude il popup
     setShowSettings(false);
   };
 
-  const switchMode = (newMode) => {
-    const defaultSecs = newMode === 'study' ? roomSettings.studyDuration * 60 : roomSettings.breakDuration * 60;
+  const switchMode = async (newMode) => {
+    const defaultSecs = newMode === 'study' ? roomSettings.studyDurationSec : roomSettings.breakDurationSec;
     setMode(newMode);
     setTimeLeft(defaultSecs);
     setIsRunning(false);
-    updateRoomTimer(defaultSecs, false, newMode);
+    setPausedRemainingSec(defaultSecs);
+    setTargetEndTime(null);
+
+    await supabase.from('pomodoro_sessions').update({
+      is_running: false,
+      mode: newMode,
+      target_end_time: null,
+      paused_remaining_sec: defaultSecs,
+      last_updated_at: new Date()
+    }).eq('room_name', currentRoom);
   };
 
   const toggleTimer = async () => {
     const newIsRunning = !isRunning;
     setIsRunning(newIsRunning);
-    updateRoomTimer(timeLeft, newIsRunning, mode);
+
+    let newTarget = null;
+    let newPausedSec = pausedRemainingSec;
+
+    if (newIsRunning) {
+      // PLAY: Calcola l'ora esatta in cui il timer scadrà
+      newTarget = new Date(Date.now() + pausedRemainingSec * 1000).toISOString();
+      setTargetEndTime(newTarget);
+    } else {
+      // PAUSA: Calcola quanti secondi mancavano al traguardo
+      const remaining = targetEndTime
+        ? Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000))
+        : pausedRemainingSec;
+
+      newPausedSec = remaining;
+      setPausedRemainingSec(remaining);
+      setTimeLeft(remaining);
+      setTargetEndTime(null);
+    }
+
+    await supabase.from('pomodoro_sessions').update({
+      is_running: newIsRunning,
+      target_end_time: newTarget,
+      paused_remaining_sec: newPausedSec,
+      last_updated_at: new Date()
+    }).eq('room_name', currentRoom);
   };
 
+
   const resetTimer = async () => {
+    clearInterval(timerRef.current);
     setIsRunning(false);
-    const secs = mode === 'study' ? roomSettings.studyDuration * 60 : roomSettings.breakDuration * 60;
-    setTimeLeft(secs);
+
+    // Definisce i valori standard fissi
+    const STANDARD_STUDY = 1500; // 25 min
+    const STANDARD_BREAK = 300;  // 5 min
+
+    // Sceglie il valore in base alla modalità attuale
+    const forcedDefaultSecs = mode === 'study' ? STANDARD_STUDY : STANDARD_BREAK;
+
+    // Aggiorna lo stato locale
+    setTimeLeft(forcedDefaultSecs);
+    setPausedRemainingSec(forcedDefaultSecs);
+    setTargetEndTime(null);
+
+    // Aggiorna il database per sincronizzare tutti gli utenti della stanza
     await supabase.from('pomodoro_sessions').update({
       is_running: false,
-      seconds_left: secs,
+      target_end_time: null,
+      paused_remaining_sec: forcedDefaultSecs,
+      // Opzionale: se vuoi che il reset ripristini anche le impostazioni della stanza
+      study_duration_sec: STANDARD_STUDY,
+      break_duration_sec: STANDARD_BREAK,
       last_updated_at: new Date()
     }).eq('room_name', currentRoom);
   };
@@ -138,23 +180,30 @@ function App() {
       await supabase.from('study_history').insert([{
         user_id: session.user.id,
         room_name: currentRoom,
-        duration_minutes: roomSettings.studyDuration
+        duration_seconds: roomSettings.studyDurationSec
       }]);
     }
 
     const nextMode = mode === 'study' ? 'break' : 'study';
-    const nextDuration = nextMode === 'study' ? roomSettings.studyDuration : roomSettings.breakDuration;
-    const nextSeconds = nextDuration * 60;
+    const nextDurationSec = nextMode === 'study' ? roomSettings.studyDurationSec : roomSettings.breakDurationSec;
     const shouldAutoStart = roomSettings.autoSwitch;
 
+    let newTarget = null;
+    if (shouldAutoStart) {
+      newTarget = new Date(Date.now() + nextDurationSec * 1000).toISOString();
+      setTargetEndTime(newTarget);
+    }
+
     setMode(nextMode);
-    setTimeLeft(nextSeconds);
+    setPausedRemainingSec(nextDurationSec);
+    setTimeLeft(nextDurationSec);
     setIsRunning(shouldAutoStart);
 
     await supabase.from('pomodoro_sessions').update({
       mode: nextMode,
-      seconds_left: nextSeconds,
       is_running: shouldAutoStart,
+      target_end_time: newTarget,
+      paused_remaining_sec: nextDurationSec,
       last_updated_at: new Date()
     }).eq('room_name', currentRoom);
 
@@ -166,8 +215,25 @@ function App() {
   };
 
 
+  const updateSettingTime = (key, deltaSec) => {
+    setRoomSettings(prev => ({
+      ...prev,
+      // Applica la variazione e impedisce che il timer scenda sotto 1 secondo
+      [key]: Math.max(1, prev[key] + deltaSec)
+    }));
+  };
 
+  const handleManualInput = (key, minutesStr, secondsStr) => {
+    // Converte il testo in numeri ignorando i caratteri non validi
+    const m = Math.max(0, parseInt(minutesStr) || 0);
+    const s = Math.max(0, parseInt(secondsStr) || 0);
+    const totalSec = m * 60 + s;
 
+    setRoomSettings(prev => ({
+      ...prev,
+      [key]: Math.max(1, totalSec)
+    }));
+  };
   
   const timerRef = useRef(null);
 
@@ -183,6 +249,17 @@ function App() {
     if (session && !currentRoom) {
       fetchRooms();
       fetchGlobalStats();
+
+      // Mantiene la lobby aggiornata in tempo reale per tutti gli utenti
+      const lobbySubscription = supabase.channel('public:pomodoro_sessions')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pomodoro_sessions' }, () => {
+          fetchRooms();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(lobbySubscription);
+      };
     }
   }, [session, currentRoom]);
 
@@ -191,20 +268,20 @@ function App() {
       .from('pomodoro_sessions')
       .select('room_name, created_by')
       .order('last_updated_at', { ascending: false });
-    
+
     if (data) setRooms(data);
   };
 
   const fetchGlobalStats = async () => {
     const { data } = await supabase
       .from('study_history')
-      .select('duration_minutes')
+      .select('duration_seconds')
       .eq('user_id', session.user.id);
-    
+
     if (data) {
       setGlobalStats({
         pomodoros: data.length,
-        totalMinutes: data.reduce((acc, curr) => acc + curr.duration_minutes, 0)
+        totalSeconds: data.reduce((acc, curr) => acc + curr.duration_seconds, 0)
       });
     }
   };
@@ -220,24 +297,33 @@ function App() {
       .single();
 
     if (error && error.code === 'PGRST116') {
-      await supabase.from('pomodoro_sessions').insert([{
+      // Tenta di creare la stanza e cattura l'errore
+      const { error: insertError } = await supabase.from('pomodoro_sessions').insert([{
         room_name: cleanName,
         created_by: session.user.id,
-        seconds_left: 1500,
         mode: 'study',
-        study_duration: 25,
-        break_duration: 5,
+        study_duration_sec: 1500,
+        break_duration_sec: 300,
+        paused_remaining_sec: 1500,
+        target_end_time: null,
         auto_switch: false
       }]);
+
+      // Se c'è un errore, blocca l'utente e stampa il problema
+      if (insertError) {
+        console.error("ERRORE DATABASE DURANTE LA CREAZIONE:", insertError);
+        alert(`Errore database: ${insertError.message}`);
+        return;
+      }
     }
-    
+
     setCurrentRoom(cleanName);
     setNewRoomName('');
   };
 
   const deleteRoom = async () => {
     const input = window.prompt(`Per eliminare definitivamente la stanza, digita il suo nome esatto: "${currentRoom}"`);
-    
+
     if (input !== currentRoom) {
       if (input !== null) {
         alert("Il nome inserito non corrisponde. Eliminazione annullata.");
@@ -249,7 +335,7 @@ function App() {
       .from('pomodoro_sessions')
       .delete()
       .eq('room_name', currentRoom);
-      
+
     leaveRoom();
   };
 
@@ -257,6 +343,8 @@ function App() {
     setCurrentRoom(null);
     setIsRunning(false);
     setTimeLeft(POMODORO_SECONDS);
+    setPausedRemainingSec(POMODORO_SECONDS);
+    setTargetEndTime(null);
     setOnlineUsers([]);
     setRoomCreator(null);
     clearInterval(timerRef.current);
@@ -268,15 +356,24 @@ function App() {
     const initializeRoom = async () => {
       const { data } = await supabase.from('pomodoro_sessions').select('*').eq('room_name', currentRoom).single();
       if (data) {
-        setTimeLeft(data.seconds_left);
-        setIsRunning(data.is_running);
         setMode(data.mode || 'study');
         setRoomCreator(data.created_by);
         setRoomSettings({
-          studyDuration: data.study_duration || 25,
-          breakDuration: data.break_duration || 5,
+          studyDurationSec: data.study_duration_sec || 1500,
+          breakDurationSec: data.break_duration_sec || 300,
           autoSwitch: data.auto_switch || false
         });
+
+        setIsRunning(data.is_running);
+        setTargetEndTime(data.target_end_time);
+        setPausedRemainingSec(data.paused_remaining_sec);
+
+        if (data.is_running && data.target_end_time) {
+          const remaining = Math.max(0, Math.ceil((new Date(data.target_end_time).getTime() - Date.now()) / 1000));
+          setTimeLeft(remaining);
+        } else {
+          setTimeLeft(data.paused_remaining_sec);
+        }
       }
       fetchStats();
     };
@@ -293,14 +390,23 @@ function App() {
 
     roomSubscription
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pomodoro_sessions', filter: `room_name=eq.${currentRoom}` }, (payload) => {
-        setTimeLeft(payload.new.seconds_left);
         setIsRunning(payload.new.is_running);
         setMode(payload.new.mode || 'study');
+        setTargetEndTime(payload.new.target_end_time);
+        setPausedRemainingSec(payload.new.paused_remaining_sec);
+
         setRoomSettings({
-          studyDuration: payload.new.study_duration || 25,
-          breakDuration: payload.new.break_duration || 5,
+          studyDurationSec: payload.new.study_duration_sec || 1500,
+          breakDurationSec: payload.new.break_duration_sec || 300,
           autoSwitch: payload.new.auto_switch || false
         });
+
+        if (payload.new.is_running && payload.new.target_end_time) {
+          const remaining = Math.max(0, Math.ceil((new Date(payload.new.target_end_time).getTime() - Date.now()) / 1000));
+          setTimeLeft(remaining);
+        } else {
+          setTimeLeft(payload.new.paused_remaining_sec);
+        }
       })
       .on('presence', { event: 'sync' }, () => {
         const presenceState = roomSubscription.presenceState();
@@ -320,17 +426,23 @@ function App() {
   }, [currentRoom]);
 
   useEffect(() => {
-    if (isRunning && timeLeft > 0) {
+    if (isRunning && targetEndTime) {
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
+        const remaining = Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000));
+        setTimeLeft(remaining);
+
+        if (remaining <= 0) {
+          clearInterval(timerRef.current);
+          handlePomodoroComplete();
+        }
       }, 1000);
-    } else if (timeLeft === 0) {
-      handlePomodoroComplete();
+    } else {
+      clearInterval(timerRef.current);
+      setTimeLeft(pausedRemainingSec);
     }
 
     return () => clearInterval(timerRef.current);
-  }, [isRunning, timeLeft]);
-
+  }, [isRunning, targetEndTime, pausedRemainingSec]);
 
 
 
@@ -338,17 +450,17 @@ function App() {
   const fetchStats = async () => {
     const { data: personalData } = await supabase
       .from('study_history')
-      .select('duration_minutes')
+      .select('duration_seconds')
       .eq('user_id', session.user.id);
 
     const { data: roomData } = await supabase
       .from('study_history')
-      .select('duration_minutes')
+      .select('duration_seconds')
       .eq('room_name', currentRoom);
 
     const calcStats = (data) => ({
       pomodoros: data ? data.length : 0,
-      totalMinutes: data ? data.reduce((acc, curr) => acc + curr.duration_minutes, 0) : 0
+      totalSeconds: data ? data.reduce((acc, curr) => acc + curr.duration_seconds, 0) : 0
     });
 
     setPersonalStats(calcStats(personalData));
@@ -363,40 +475,112 @@ function App() {
 
   if (!session) return <Auth />;
 
-  // Genera lo stato corrente della mascotte passando ESCLUSIVAMENTE i minuti della stanza
-  const mascot = getMascotStage(roomStats.totalMinutes);
+  // Genera lo stato corrente della mascotte passando ESCLUSIVAMENTE i secondi della stanza
+  const mascot = getMascotStage(roomStats.totalSeconds);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white font-sans flex flex-col selection:bg-white/30 selection:text-white">
-    
-    {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
-          <div className="bg-neutral-900 border border-white/10 p-8 rounded-3xl shadow-2xl w-full max-w-sm">
-            <h2 className="text-2xl font-bold mb-6 text-white border-b border-white/10 pb-4">Impostazioni Stanza</h2>
-            
-            <div className="space-y-6">
+
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4 overflow-y-auto py-8">
+          <div className="bg-neutral-900 border border-white/10 p-8 rounded-3xl shadow-2xl w-full max-w-md my-auto">
+            <h2 className="text-2xl font-bold mb-8 text-white border-b border-white/10 pb-4 text-center">Impostazioni Stanza</h2>
+
+            <div className="space-y-10">
+
+              {/* SEZIONE DURATA STUDIO */}
               <div>
-                <label className="block text-sm font-bold text-neutral-400 mb-2 uppercase tracking-widest">Durata Studio (min)</label>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => setRoomSettings({...roomSettings, studyDuration: Math.max(1, roomSettings.studyDuration - 1)})} className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-lg text-xl transition-colors">-</button>
-                  <span className="text-2xl font-bold flex-1 text-center">{roomSettings.studyDuration}</span>
-                  <button onClick={() => setRoomSettings({...roomSettings, studyDuration: roomSettings.studyDuration + 1})} className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-lg text-xl transition-colors">+</button>
+                <label className="block text-sm font-bold text-neutral-400 mb-4 uppercase tracking-widest text-center">Durata Studio</label>
+
+                {/* Input manuale (Minuti : Secondi) */}
+                <div className="flex items-center justify-center gap-3 mb-6 text-4xl font-bold">
+                  {/* Minuti Studio */}
+                  <input
+                    type="number"
+                    min="0"
+                    value={Math.floor(roomSettings.studyDurationSec / 60).toString().padStart(2, '0')}
+                    onChange={(e) => handleManualInput('studyDurationSec', e.target.value, roomSettings.studyDurationSec % 60)}
+                    className="w-24 bg-black/40 text-center border border-white/10 rounded-2xl py-2 focus:ring-1 focus:ring-red-500 outline-none transition-all"
+                  />
+
+                  {/* Secondi Studio */}
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={(roomSettings.studyDurationSec % 60).toString().padStart(2, '0')}
+                    onChange={(e) => handleManualInput('studyDurationSec', Math.floor(roomSettings.studyDurationSec / 60), e.target.value)}
+                    className="w-24 bg-black/40 text-center border border-white/10 rounded-2xl py-2 focus:ring-1 focus:ring-red-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Bottoni Rapidi: Minuti */}
+                <div className="flex justify-center gap-2 mb-3">
+                  <button onClick={() => updateSettingTime('studyDurationSec', -600)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">-10m</button>
+                  <button onClick={() => updateSettingTime('studyDurationSec', -300)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">-5m</button>
+                  <button onClick={() => updateSettingTime('studyDurationSec', 300)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">+5m</button>
+                  <button onClick={() => updateSettingTime('studyDurationSec', 600)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">+10m</button>
+                </div>
+
+                {/* Bottoni Rapidi: Secondi */}
+                <div className="flex justify-center gap-2">
+                  <button onClick={() => updateSettingTime('studyDurationSec', -30)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">-30s</button>
+                  <button onClick={() => updateSettingTime('studyDurationSec', -10)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">-10s</button>
+                  <button onClick={() => updateSettingTime('studyDurationSec', 10)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">+10s</button>
+                  <button onClick={() => updateSettingTime('studyDurationSec', 30)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">+30s</button>
                 </div>
               </div>
 
+              <div className="w-full h-px bg-white/10"></div>
+
+              {/* SEZIONE DURATA PAUSA */}
               <div>
-                <label className="block text-sm font-bold text-neutral-400 mb-2 uppercase tracking-widest">Durata Pausa (min)</label>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => setRoomSettings({...roomSettings, breakDuration: Math.max(1, roomSettings.breakDuration - 1)})} className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-lg text-xl transition-colors">-</button>
-                  <span className="text-2xl font-bold flex-1 text-center">{roomSettings.breakDuration}</span>
-                  <button onClick={() => setRoomSettings({...roomSettings, breakDuration: roomSettings.breakDuration + 1})} className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-lg text-xl transition-colors">+</button>
+                <label className="block text-sm font-bold text-neutral-400 mb-4 uppercase tracking-widest text-center">Durata Pausa</label>
+
+                {/* Input manuale (Minuti : Secondi) */}
+                <div className="flex items-center justify-center gap-3 mb-6 text-4xl font-bold">
+                  {/* Minuti Pausa */}
+                  <input
+                    type="number"
+                    min="0"
+                    value={Math.floor(roomSettings.breakDurationSec / 60).toString().padStart(2, '0')}
+                    onChange={(e) => handleManualInput('breakDurationSec', e.target.value, roomSettings.breakDurationSec % 60)}
+                    className="w-24 bg-black/40 text-center border border-white/10 rounded-2xl py-2 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
+                  />
+
+                  {/* Secondi Pausa */}
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={(roomSettings.breakDurationSec % 60).toString().padStart(2, '0')}
+                    onChange={(e) => handleManualInput('breakDurationSec', Math.floor(roomSettings.breakDurationSec / 60), e.target.value)}
+                    className="w-24 bg-black/40 text-center border border-white/10 rounded-2xl py-2 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Bottoni Rapidi: Minuti */}
+                <div className="flex justify-center gap-2 mb-3">
+                  <button onClick={() => updateSettingTime('breakDurationSec', -600)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">-10m</button>
+                  <button onClick={() => updateSettingTime('breakDurationSec', -300)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">-5m</button>
+                  <button onClick={() => updateSettingTime('breakDurationSec', 300)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">+5m</button>
+                  <button onClick={() => updateSettingTime('breakDurationSec', 600)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition-colors active:scale-95">+10m</button>
+                </div>
+
+                {/* Bottoni Rapidi: Secondi */}
+                <div className="flex justify-center gap-2">
+                  <button onClick={() => updateSettingTime('breakDurationSec', -30)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">-30s</button>
+                  <button onClick={() => updateSettingTime('breakDurationSec', -10)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">-10s</button>
+                  <button onClick={() => updateSettingTime('breakDurationSec', 10)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">+10s</button>
+                  <button onClick={() => updateSettingTime('breakDurationSec', 30)} className="flex-1 py-2 bg-black/40 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-neutral-400 transition-colors active:scale-95">+30s</button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+              {/* TOGGLE PASSAGGIO AUTOMATICO */}
+              <div className="flex items-center justify-between pt-6 border-t border-white/10">
                 <label className="text-sm font-bold text-neutral-400 uppercase tracking-widest">Passaggio Automatico</label>
-                <button 
-                  onClick={() => setRoomSettings({...roomSettings, autoSwitch: !roomSettings.autoSwitch})}
+                <button
+                  onClick={() => setRoomSettings({ ...roomSettings, autoSwitch: !roomSettings.autoSwitch })}
                   className={`w-14 h-8 rounded-full transition-colors relative ${roomSettings.autoSwitch ? 'bg-emerald-500' : 'bg-white/10'}`}
                 >
                   <div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-transform ${roomSettings.autoSwitch ? 'translate-x-7' : 'translate-x-1'}`}></div>
@@ -404,7 +588,9 @@ function App() {
               </div>
             </div>
 
-            <button onClick={applyAndSaveSettings} className="w-full mt-8 py-4 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95">Chiudi e Applica</button>
+            <button onClick={applyAndSaveSettings} className="w-full mt-10 py-5 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-2xl transition-all shadow-xl active:scale-95 text-lg tracking-wide">
+              Chiudi e Applica
+            </button>
           </div>
         </div>
       )}
@@ -439,7 +625,7 @@ function App() {
               </div>
               <div className="w-px bg-white/10"></div>
               <div>
-                <span className="block text-4xl font-bold text-white drop-shadow-lg">{(globalStats.totalMinutes / 60).toFixed(1)}h</span>
+                <span className="block text-4xl font-bold text-white drop-shadow-lg">{(globalStats.totalSeconds / 3600).toFixed(1)}h</span>
                 <span className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1 block">Ore totali</span>
               </div>
             </div>
@@ -455,7 +641,7 @@ function App() {
                 onChange={(e) => setNewRoomName(e.target.value)}
                 className="flex-1 px-5 py-4 bg-black/40 text-white rounded-xl focus:outline-none focus:ring-1 focus:ring-red-500/50 border border-white/10 placeholder-neutral-500 backdrop-blur-sm transition-all shadow-inner"
               />
-              <button 
+              <button
                 onClick={() => joinRoom(newRoomName)}
                 className="bg-red-600/80 hover:bg-red-500 backdrop-blur-md border border-red-500/50 text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg active:scale-95"
               >
@@ -472,7 +658,7 @@ function App() {
               rooms.map((room, index) => (
                 <div key={index} className="bg-white/5 backdrop-blur-lg p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10 transition-all shadow-lg group">
                   <span className="font-bold text-lg text-white group-hover:drop-shadow-md transition-all">{room.room_name}</span>
-                  <button 
+                  <button
                     onClick={() => joinRoom(room.room_name)}
                     className="bg-red-600/80 hover:bg-red-500 backdrop-blur-md border border-red-500/50 text-white px-5 py-2.5 rounded-lg font-semibold transition-all text-sm shadow-md active:scale-95"
                   >
@@ -487,18 +673,18 @@ function App() {
         <main className="max-w-4xl mx-auto mt-8 p-4 w-full grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow">
           <div className="md:col-span-3 mb-2 flex justify-between items-center bg-white/5 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-lg">
             <div className="flex items-center gap-4">
-              <button 
+              <button
                 onClick={leaveRoom}
                 className="text-neutral-300 hover:text-white flex items-center gap-2 transition-colors font-medium px-2 py-1"
               >
                 ← Torna alla Lobby
               </button>
-              
+
               {roomCreator === session.user.id && (
                 <div className="w-px h-6 bg-white/20 mx-2"></div>
               )}
               {roomCreator === session.user.id && (
-                <button 
+                <button
                   onClick={deleteRoom}
                   className="bg-red-900/80 hover:bg-red-800 backdrop-blur-md border border-red-500/30 text-red-100 px-4 py-2 rounded-lg font-semibold transition-all text-sm shadow-md active:scale-95"
                 >
@@ -506,7 +692,7 @@ function App() {
                 </button>
               )}
             </div>
-            
+
             <div className="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-xl border border-emerald-500/30 shadow-inner">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -518,47 +704,46 @@ function App() {
             </div>
           </div>
 
-            <div className="md:col-span-2 flex flex-col gap-6">
-              <div className="bg-white/5 backdrop-blur-xl p-10 rounded-3xl border border-white/10 shadow-2xl text-center relative overflow-hidden">
+          <div className="md:col-span-2 flex flex-col gap-6">
+            <div className="bg-white/5 backdrop-blur-xl p-10 rounded-3xl border border-white/10 shadow-2xl text-center relative overflow-hidden">
 
-                <div className="flex justify-between items-start mb-8 z-10 relative w-full">
-                  <div className="flex gap-4">
-                    <button onClick={() => switchMode('study')} className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${mode === 'study' ? 'bg-red-600 text-white shadow-lg shadow-red-600/20' : 'bg-white/5 text-neutral-400'}`}>STUDIO</button>
-                    <button onClick={() => switchMode('break')} className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${mode === 'break' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'bg-white/5 text-neutral-400'}`}>PAUSA</button>
-                  </div>
-
-                  <button
-                    onClick={() => setShowSettings(true)}
-                    className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-xl"
-                    title="Impostazioni Timer"
-                  >
-                    ⚙️
-                  </button>
+              <div className="flex justify-between items-start mb-8 z-10 relative w-full">
+                <div className="flex gap-4">
+                  <button onClick={() => switchMode('study')} className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${mode === 'study' ? 'bg-red-600 text-white shadow-lg shadow-red-600/20' : 'bg-white/5 text-neutral-400'}`}>STUDIO</button>
+                  <button onClick={() => switchMode('break')} className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${mode === 'break' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'bg-white/5 text-neutral-400'}`}>PAUSA</button>
                 </div>
 
-                <div className="text-[120px] font-mono font-bold leading-none tracking-tighter mb-12 drop-shadow-2xl">
-                  {formatTime(timeLeft)}
-                </div>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-xl"
+                  title="Impostazioni Timer"
+                >
+                  ⚙️
+                </button>
+              </div>
 
-                <div className="flex gap-4 max-w-md mx-auto z-10 relative">
-                  <button onClick={toggleTimer} className={`flex-1 py-5 rounded-2xl font-bold text-xl transition-all shadow-lg active:scale-95 border ${isRunning ? 'bg-amber-500 text-black border-amber-400' : 'bg-white text-black border-white'}`}>
-                    {isRunning ? 'PAUSA' : 'AVVIA'}
-                  </button>
-                  <button onClick={resetTimer} className="px-8 py-5 bg-white/10 hover:bg-white/20 rounded-2xl font-bold border border-white/10 transition-all active:scale-95">RESET</button>
-                </div>
+              <div className="text-[120px] font-mono font-bold leading-none tracking-tighter mb-12 drop-shadow-2xl">
+                {formatTime(timeLeft)}
+              </div>
+
+              <div className="flex gap-4 max-w-md mx-auto z-10 relative">
+                <button onClick={toggleTimer} className={`flex-1 py-5 rounded-2xl font-bold text-xl transition-all shadow-lg active:scale-95 border ${isRunning ? 'bg-amber-500 text-black border-amber-400' : 'bg-white text-black border-white'}`}>
+                  {isRunning ? 'PAUSA' : 'AVVIA'}
+                </button>
+                <button onClick={resetTimer} className="px-8 py-5 bg-white/10 hover:bg-white/20 rounded-2xl font-bold border border-white/10 transition-all active:scale-95">RESET</button>
               </div>
             </div>
+          </div>
 
           <div className="flex flex-col gap-6">
-            
-            {/* COMPONENTE MASCOTTE (Omino Ciliegino) */}
+
             <div className="bg-white/5 backdrop-blur-xl p-7 rounded-3xl border border-white/10 shadow-xl relative overflow-hidden">
               <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
-              
+
               <h3 className="text-sm font-bold text-neutral-400 mb-5 border-b border-white/10 pb-3 uppercase tracking-widest">
                 Ciliegino della Stanza
               </h3>
-              
+
               <div className="flex flex-col items-center justify-center text-center">
                 <div className="text-6xl mb-3 filter drop-shadow-xl animate-bounce" style={{ animationDuration: '3s' }}>
                   {mascot.visual}
@@ -571,12 +756,12 @@ function App() {
                 </div>
 
                 <div className="w-full bg-black/40 rounded-full h-3 border border-white/5 shadow-inner relative overflow-hidden">
-                  <div 
+                  <div
                     className="bg-gradient-to-r from-red-600 to-red-400 h-full rounded-full transition-all duration-1000 ease-out"
                     style={{ width: `${mascot.progress}%` }}
                   ></div>
                 </div>
-                
+
                 <div className="flex justify-between w-full mt-2 text-xs font-medium text-neutral-500">
                   <span>{mascot.xp} XP</span>
                   <span>{mascot.isMaxLevel ? 'MAX' : `${mascot.nextXp} XP`}</span>
@@ -607,12 +792,12 @@ function App() {
               </h3>
               <div className="space-y-4 text-neutral-300">
                 <p className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5">
-                  <span className="font-medium">Pomodori:</span> 
+                  <span className="font-medium">Pomodori:</span>
                   <span className="font-bold text-white text-lg bg-white/10 px-3 py-1 rounded-lg border border-white/10">{roomStats.pomodoros}</span>
                 </p>
                 <p className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5">
-                  <span className="font-medium">Minuti:</span> 
-                  <span className="font-bold text-white text-lg bg-white/10 px-3 py-1 rounded-lg border border-white/10">{roomStats.totalMinutes}</span>
+                  <span className="font-medium">Minuti:</span>
+                  <span className="font-bold text-white text-lg bg-white/10 px-3 py-1 rounded-lg border border-white/10">{Math.floor(roomStats.totalSeconds / 60)}</span>
                 </p>
               </div>
             </div>
