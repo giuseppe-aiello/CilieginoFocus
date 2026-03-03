@@ -86,17 +86,25 @@ const PIXEL_FRUITS = {
     [6, 6, 6, 6, 6, 6], // Corpo del grappolo
     [0, 6, 6, 6, 6, 0], // Si stringe
     [0, 0, 6, 6, 0, 0], // Punta del grappolo
-  ]  
+  ],
+  banana: [
+    [0, 0, 0, 0, 1, 0], // Picciolo superiore
+    [0, 0, 0, 7, 7, 0], // Inizio curva
+    [0, 0, 7, 7, 0, 0], // Corpo centrale
+    [0, 7, 7, 0, 0, 0], // Parte inferiore
+    [0, 1, 0, 0, 0, 0], // Punta scura
+  ]
 };
 
 const COLOR_MAP = {
   0: 'transparent',
-  1: '#166534', // Verde scuro (steli/picciolo)
+  1: '#166534', // Verde scuro/Picciolo
   2: '#ef4444', // Rosso pomodoro
   3: '#4ade80', // Verde mela
   4: '#facc15', // Giallo limone
-  5: '#991b1b', // Rosso ciliegia (Bordeaux)
-  6: '#8b5cf6', // Viola uva (Violet)
+  5: '#991b1b', // Rosso ciliegia
+  6: '#8b5cf6', // Viola uva
+  7: '#fde047', // Giallo banana (Bright Yellow)
 };
 
 const PixelAvatar = ({ type, size = "w-12" }) => {
