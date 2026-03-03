@@ -72,15 +72,31 @@ const PIXEL_FRUITS = {
     [4, 4, 4, 4, 4, 4],
     [4, 4, 4, 4, 4, 4],
     [0, 4, 4, 4, 4, 0],
-  ]
+  ],
+  ciliegie: [
+    [0, 0, 1, 0, 1, 0], // Sommità dei gambi
+    [0, 1, 0, 1, 0, 0], // Gambi che scendono
+    [5, 5, 0, 5, 5, 0], // Parte superiore dei frutti
+    [5, 5, 5, 5, 5, 5], // Corpo dei frutti
+    [0, 5, 5, 0, 5, 5], // Base dei frutti
+  ],
+  uva: [
+    [0, 0, 1, 1, 0, 0], // Picciolo
+    [0, 6, 6, 6, 6, 0], // Parte superiore grappolo
+    [6, 6, 6, 6, 6, 6], // Corpo del grappolo
+    [0, 6, 6, 6, 6, 0], // Si stringe
+    [0, 0, 6, 6, 0, 0], // Punta del grappolo
+  ]  
 };
 
 const COLOR_MAP = {
   0: 'transparent',
-  1: '#166534', // Picciolo (Verde scuro)
-  2: '#ef4444', // Pomodoro (Rosso)
-  3: '#4ade80', // Mela (Verde chiaro)
-  4: '#facc15', // Limone (Giallo)
+  1: '#166534', // Verde scuro (steli/picciolo)
+  2: '#ef4444', // Rosso pomodoro
+  3: '#4ade80', // Verde mela
+  4: '#facc15', // Giallo limone
+  5: '#991b1b', // Rosso ciliegia (Bordeaux)
+  6: '#8b5cf6', // Viola uva (Violet)
 };
 
 const PixelAvatar = ({ type, size = "w-12 h-12" }) => {
