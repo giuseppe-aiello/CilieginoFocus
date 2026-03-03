@@ -99,12 +99,23 @@ const COLOR_MAP = {
   6: '#8b5cf6', // Viola uva (Violet)
 };
 
-const PixelAvatar = ({ type, size = "w-12 h-12" }) => {
-  const pixels = PIXEL_FRUITS[type] || PIXEL_FRUITS.pomodoro;
+const PixelAvatar = ({ type, size = "w-12" }) => {
+  const pixels = PIXEL_FRUITS[type] || PIXEL_FRUITS.ciliegie;
+
   return (
-    <div className={`${size} grid grid-cols-6 gap-0.5`}>
+    <div
+      className={`${size} grid grid-cols-6 gap-0.5`}
+      style={{
+        aspectRatio: '6 / 5',
+        height: 'auto' // Impedisce a classi come h-12 di distorcere l'altezza
+      }}
+    >
       {pixels.flat().map((colorIdx, i) => (
-        <div key={i} style={{ backgroundColor: COLOR_MAP[colorIdx] }} className="rounded-sm" />
+        <div
+          key={i}
+          style={{ backgroundColor: COLOR_MAP[colorIdx] }}
+          className="rounded-sm"
+        />
       ))}
     </div>
   );
