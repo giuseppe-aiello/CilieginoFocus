@@ -771,8 +771,7 @@ function App() {
                         placeholder="Inserisci nickname..."
                         onChange={(e) => setProfile({ ...profile, nickname: e.target.value })}
                       />
-                      <div className="flex gap-4">
-                        {Object.keys(PIXEL_FRUITS).map(id => (
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-40 overflow-y-auto p-1 custom-scrollbar">                        {Object.keys(PIXEL_FRUITS).map(id => (
                           <button
                             key={id}
                             onClick={() => setProfile({ ...profile, avatar_id: id })}
