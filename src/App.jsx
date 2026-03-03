@@ -757,42 +757,47 @@ function App() {
         <main className="max-w-4xl mx-auto mt-12 p-4 w-full">
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl mb-8">
             <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-              <div className="flex flex-col sm:flex-row items-center gap-6 w-full">
-                {/* Contenitore Avatar con dimensioni fisse e centratura perfetta */}
-                <div className="w-24 h-24 sm:w-28 sm:h-28 bg-black/40 rounded-2xl border border-white/10 shadow-inner flex items-center justify-center shrink-0">
-                  <PixelAvatar type={profile.avatar_id} size="w-16 h-16 sm:w-20 sm:h-20" />
+              <div className="flex flex-row items-center gap-4 sm:gap-6 w-full">
+                {/* Contenitore Avatar Fisso */}
+                <div className="w-20 h-20 sm:w-28 sm:h-28 bg-black/40 rounded-2xl border border-white/10 shadow-inner flex items-center justify-center shrink-0">
+                  <PixelAvatar type={profile.avatar_id} size="w-14 h-14 sm:w-20 sm:h-20" />
                 </div>
 
-                <div className="flex-1 w-full text-center sm:text-left">                  {isEditingProfile ? (
-                    <div className="space-y-4">
+                {/* Contenitore Testo/Input */}
+                <div className="flex-1 min-w-0 text-left">
+                  {isEditingProfile ? (
+                    <div className="space-y-3">
                       <input
-                        className="bg-black/60 border border-white/20 p-2 rounded-lg text-white w-full outline-none focus:ring-1 focus:ring-red-500"
+                        className="bg-black/60 border border-white/20 p-2 rounded-lg text-white w-full outline-none focus:ring-1 focus:ring-red-500 text-sm"
                         value={profile.nickname}
-                        placeholder="Inserisci nickname..."
+                        placeholder="Nickname..."
                         onChange={(e) => setProfile({ ...profile, nickname: e.target.value })}
                       />
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 max-h-40 overflow-y-auto p-1 custom-scrollbar">                        {Object.keys(PIXEL_FRUITS).map(id => (
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-32 overflow-y-auto p-1 custom-scrollbar">
+                        {Object.keys(PIXEL_FRUITS).map(id => (
                           <button
                             key={id}
                             onClick={() => setProfile({ ...profile, avatar_id: id })}
-                            className={`p-2 rounded-xl border transition-all ${profile.avatar_id === id ? 'bg-red-600/20 border-red-500' : 'bg-white/5 border-white/10'}`}
+                            className={`p-1.5 rounded-xl border transition-all flex justify-center ${profile.avatar_id === id ? 'bg-red-600/20 border-red-500' : 'bg-white/5 border-white/10'}`}
                           >
-                            <PixelAvatar type={id} size="w-8 h-8" />
+                            <PixelAvatar type={id} size="w-6 h-6 sm:w-8 h-8" />
                           </button>
                         ))}
                       </div>
-                      <button onClick={saveProfile} className="bg-emerald-600 px-4 py-2 rounded-lg font-bold text-sm">Salva Profilo</button>
+                      <button onClick={saveProfile} className="bg-emerald-600 px-3 py-1.5 rounded-lg font-bold text-xs">
+                        Salva
+                      </button>
                     </div>
                   ) : (
                     <div>
-                        <h2 className="text-xl md:text-3xl font-bold text-white flex flex-wrap items-center gap-2 md:gap-3">
-                          <span className="truncate max-w-[180px] sm:max-w-[250px] md:max-w-none" title={profile.nickname}>
-                            {profile.nickname || 'Studente Anonimo'}
-                          </span>
-                          <button onClick={() => setIsEditingProfile(true)} className="text-[10px] md:text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20 shrink-0">
-                            Modifica
-                          </button>
-                        </h2>
+                      <h2 className="text-xl md:text-3xl font-bold text-white flex items-center gap-2 md:gap-3">
+                        <span className="truncate" title={profile.nickname}>
+                          {profile.nickname || 'Studente Anonimo'}
+                        </span>
+                        <button onClick={() => setIsEditingProfile(true)} className="text-[10px] md:text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20 shrink-0">
+                          Modifica
+                        </button>
+                      </h2>
                       <p className="text-neutral-400 mt-1 uppercase text-xs tracking-tighter font-bold">Grado: {mascot.name}</p>
                     </div>
                   )}
