@@ -757,13 +757,13 @@ function App() {
         <main className="max-w-4xl mx-auto mt-12 p-4 w-full">
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl mb-8">
             <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-              <div className="flex items-center gap-6 w-full">
-                <div className="p-4 bg-black/40 rounded-2xl border border-white/10 shadow-inner flex items-center justify-center shrink-0">
-                  <PixelAvatar type={profile.avatar_id} size="w-20 h-20" />
+              <div className="flex flex-col sm:flex-row items-center gap-6 w-full">
+                {/* Contenitore Avatar con dimensioni fisse e centratura perfetta */}
+                <div className="w-24 h-24 sm:w-28 sm:h-28 bg-black/40 rounded-2xl border border-white/10 shadow-inner flex items-center justify-center shrink-0">
+                  <PixelAvatar type={profile.avatar_id} size="w-16 h-16 sm:w-20 sm:h-20" />
                 </div>
 
-                <div className="flex-1">
-                  {isEditingProfile ? (
+                <div className="flex-1 w-full text-center sm:text-left">                  {isEditingProfile ? (
                     <div className="space-y-4">
                       <input
                         className="bg-black/60 border border-white/20 p-2 rounded-lg text-white w-full outline-none focus:ring-1 focus:ring-red-500"
