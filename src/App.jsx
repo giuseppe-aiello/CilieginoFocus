@@ -94,8 +94,12 @@ const PixelAvatar = ({ type, size = "w-12 h-12" }) => {
   );
 };
 
+const alarmSound = new Audio('/rooster.wav');
+
 function App() {
 
+
+  //States
   const [profile, setProfile] = useState({ nickname: '', avatar_id: 'pomodoro' });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
@@ -128,6 +132,8 @@ function App() {
   useEffect(() => {
     if (session) fetchProfile();
   }, [session]);
+
+
 
   const fetchProfile = async () => {
     if (!session?.user) return; // Protezione: esce se non c'è l'utente
@@ -255,6 +261,29 @@ function App() {
     setIsRunning(false);
     clearInterval(timerRef.current);
 
+    // RIPRODUZIONE AUDIO A FINE TIMER
+    try {
+      alarmSound.currentTime = 0; // Ripristina l'audio all'inizio
+      alarmSound.play();
+    } catch (error) {
+      console.error("Il browser ha bloccato l'audio in autoplay:", error);
+    }
+
+    // Notifica Web nativa (Popup di sistema)
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const isStudy = mode === 'study';
+      const notifTitle = isStudy ? "Sessione Terminata! 🍅" : "Pausa Finita! 📚";
+      const notifBody = isStudy
+        ? "Ottimo lavoro! Goditi i tuoi minuti di pausa."
+        : "Pausa terminata. È ora di tornare a concentrarsi.";
+
+      new Notification(notifTitle, {
+        body: notifBody,
+        icon: '/favicon.ico'
+      });
+    }
+    
+
     if (mode === 'study') {
       await supabase.from('study_history').insert([{
         user_id: session.user.id,
@@ -367,6 +396,16 @@ function App() {
   };
 
   const joinRoom = async (roomName) => {
+
+    // Richiesta permessi notifica al click dell'utente
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      try {
+        await Notification.requestPermission();
+      } catch (error) {
+        console.error("Errore richiesta notifiche:", error);
+      }
+    }
+
     if (!roomName.trim()) return;
     const cleanName = roomName.trim();
 
