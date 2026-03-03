@@ -722,15 +722,15 @@ function App() {
       )}
 
       <nav className="bg-black/40 backdrop-blur-lg border-b border-white/10 p-4 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold tracking-wider flex items-center gap-2 drop-shadow-lg text-white">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-wider flex items-center gap-2 drop-shadow-lg text-white">
             🍒 CilieginoFocus
           </h1>
-          <div className="flex items-center gap-4">
-            <div className="text-sm bg-white/10 border border-white/20 backdrop-blur-md px-4 py-1.5 rounded-full font-medium shadow-inner">
+          <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="text-xs sm:text-sm bg-white/10 border border-white/20 backdrop-blur-md px-3 py-1.5 rounded-full font-medium shadow-inner truncate max-w-[200px] sm:max-w-none">
               {session.user.email}
             </div>
-            <button onClick={() => supabase.auth.signOut()} className="text-sm text-red-400 hover:text-red-300 hover:underline font-semibold transition-colors">
+            <button onClick={() => supabase.auth.signOut()} className="text-xs sm:text-sm text-red-400 hover:text-red-300 hover:underline font-semibold transition-colors shrink-0">
               Esci
             </button>
           </div>
@@ -770,10 +770,14 @@ function App() {
                     </div>
                   ) : (
                     <div>
-                      <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-                        {profile.nickname || 'Studente Anonimo'}
-                        <button onClick={() => setIsEditingProfile(true)} className="text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20">Modifica</button>
-                      </h2>
+                        <h2 className="text-xl md:text-3xl font-bold text-white flex flex-wrap items-center gap-2 md:gap-3">
+                          <span className="truncate max-w-[180px] sm:max-w-[250px] md:max-w-none" title={profile.nickname}>
+                            {profile.nickname || 'Studente Anonimo'}
+                          </span>
+                          <button onClick={() => setIsEditingProfile(true)} className="text-[10px] md:text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20 shrink-0">
+                            Modifica
+                          </button>
+                        </h2>
                       <p className="text-neutral-400 mt-1 uppercase text-xs tracking-tighter font-bold">Grado: {mascot.name}</p>
                     </div>
                   )}
@@ -796,17 +800,17 @@ function App() {
 
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl mb-8">
             <h2 className="text-2xl font-bold mb-5 text-white drop-shadow-md">Crea una nuova stanza</h2>
-            <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row gap-3 md:gap-4">
               <input
                 type="text"
                 placeholder="Nome della stanza (es. EsameFisica)"
                 value={newRoomName}
                 onChange={(e) => setNewRoomName(e.target.value)}
-                className="flex-1 px-5 py-4 bg-black/40 text-white rounded-xl focus:outline-none focus:ring-1 focus:ring-red-500/50 border border-white/10 placeholder-neutral-500 backdrop-blur-sm transition-all shadow-inner"
+                className="w-full px-4 py-3 md:px-5 md:py-4 bg-black/40 text-white rounded-xl focus:outline-none focus:ring-1 focus:ring-red-500/50 border border-white/10 placeholder-neutral-500 backdrop-blur-sm transition-all shadow-inner"
               />
               <button
                 onClick={() => joinRoom(newRoomName)}
-                className="bg-red-600/80 hover:bg-red-500 backdrop-blur-md border border-red-500/50 text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg active:scale-95"
+                className="w-full md:w-auto bg-red-600/80 hover:bg-red-500 backdrop-blur-md border border-red-500/50 text-white px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold transition-all shadow-lg active:scale-95 whitespace-nowrap"
               >
                 Crea / Entra
               </button>
