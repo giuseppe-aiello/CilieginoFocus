@@ -312,7 +312,7 @@ function App() {
     // Notifica Web nativa (Popup di sistema)
     if ('Notification' in window && Notification.permission === 'granted') {
       const isStudy = mode === 'study';
-      const notifTitle = isStudy ? "Sessione Terminata! 🍅" : "Pausa Finita! 📚";
+      const notifTitle = isStudy ? "Sessione Terminata! BRAVO CICCIOBARULLA 🍅" : "Pausa Finita! Adesso è ora di studiare cicciobarulla... 📚";
       const notifBody = isStudy
         ? "Ottimo lavoro! Goditi i tuoi minuti di pausa."
         : "Pausa terminata. È ora di tornare a concentrarsi.";
