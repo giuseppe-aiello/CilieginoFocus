@@ -157,6 +157,19 @@ function App() {
 
 
   useEffect(() => {
+    if (showSettings) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Pulizia in caso il componente venga smontato mentre il modale è aperto
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showSettings]);
+
+  useEffect(() => {
     if (session) fetchProfile();
   }, [session]);
 
@@ -631,11 +644,13 @@ function App() {
   // Genera lo stato corrente della mascotte passando ESCLUSIVAMENTE i secondi della stanza
   const mascot = getMascotStage(roomStats.totalSeconds);
 
+  
+
   return (
     <div className="min-h-screen bg-neutral-950 text-white font-sans flex flex-col selection:bg-white/30 selection:text-white">
 
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4 overflow-y-auto py-8">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-md px-4 overflow-y-auto py-8">
           <div className="bg-neutral-900 border border-white/10 p-8 rounded-3xl shadow-2xl w-full max-w-md my-auto">
             <h2 className="text-2xl font-bold mb-8 text-white border-b border-white/10 pb-4 text-center">Impostazioni Stanza</h2>
 
@@ -748,19 +763,27 @@ function App() {
         </div>
       )}
 
-      <nav className="bg-black/40 backdrop-blur-lg border-b border-white/10 p-4 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-wider flex items-center gap-2 drop-shadow-lg text-white">
+      <nav className="bg-black/40 backdrop-blur-lg border-b border-white/10 p-3 sm:p-4 sticky top-0 z-50">
+        <div className="max-w-4xl mx-auto flex flex-row justify-between items-center gap-2 sm:gap-4 w-full">
+
+          {/* Sinistra: Logo e Nome App */}
+          <h1 className="text-base sm:text-2xl font-bold tracking-tight sm:tracking-wider flex items-center gap-1 sm:gap-2 drop-shadow-lg text-white whitespace-nowrap shrink-0">
             🍒 CilieginoFocus
           </h1>
-          <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
-            <div className="text-xs sm:text-sm bg-white/10 border border-white/20 backdrop-blur-md px-3 py-1.5 rounded-full font-medium shadow-inner truncate max-w-[200px] sm:max-w-none">
+
+          {/* Destra: Utente e Bottone Esci */}
+          <div className="flex items-center gap-2 sm:gap-4 justify-end min-w-0">
+            <div className="text-[10px] sm:text-sm bg-white/10 border border-white/20 backdrop-blur-md px-2 py-1 sm:px-4 sm:py-1.5 rounded-full font-medium shadow-inner truncate min-w-0">
               {session.user.email}
             </div>
-            <button onClick={() => supabase.auth.signOut()} className="text-xs sm:text-sm text-red-400 hover:text-red-300 hover:underline font-semibold transition-colors shrink-0">
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="text-xs sm:text-sm text-red-400 hover:text-red-300 hover:underline font-semibold transition-colors shrink-0 whitespace-nowrap"
+            >
               Esci
             </button>
           </div>
+
         </div>
       </nav>
 
@@ -869,38 +892,42 @@ function App() {
         </main>
       ) : (
         <main className="max-w-4xl mx-auto mt-8 p-4 w-full grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow">
-          <div className="md:col-span-3 mb-2 flex justify-between items-center bg-white/5 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-lg">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={leaveRoom}
-                className="text-neutral-300 hover:text-white flex items-center gap-2 transition-colors font-medium px-2 py-1"
-              >
-                ← Torna alla Lobby
-              </button>
+            <div className="md:col-span-3 mb-2 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 bg-white/5 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-lg">
 
-              {roomCreator === session.user.id && (
-                <div className="w-px h-6 bg-white/20 mx-2"></div>
-              )}
-              {roomCreator === session.user.id && (
+              {/* Gruppo Bottoni Sinistra */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                 <button
-                  onClick={deleteRoom}
-                  className="bg-red-900/80 hover:bg-red-800 backdrop-blur-md border border-red-500/30 text-red-100 px-4 py-2 rounded-lg font-semibold transition-all text-sm shadow-md active:scale-95"
+                  onClick={leaveRoom}
+                  className="text-neutral-300 hover:text-white flex items-center gap-1 sm:gap-2 transition-colors font-medium px-2 py-1 text-sm sm:text-base whitespace-nowrap"
                 >
-                  Elimina Stanza
+                  ← Torna alla Lobby
                 </button>
-              )}
-            </div>
 
-            <div className="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-xl border border-emerald-500/30 shadow-inner">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-              <span className="text-sm font-bold text-emerald-400 tracking-wide">
-                {onlineUsers.length} {onlineUsers.length === 1 ? 'Connesso' : 'Connessi'}
-              </span>
+                {roomCreator === session.user.id && (
+                  <div className="hidden sm:block w-px h-6 bg-white/20 mx-2"></div>
+                )}
+
+                {roomCreator === session.user.id && (
+                  <button
+                    onClick={deleteRoom}
+                    className="bg-red-900/80 hover:bg-red-800 backdrop-blur-md border border-red-500/30 text-red-100 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold transition-all text-xs sm:text-sm shadow-md active:scale-95 whitespace-nowrap"
+                  >
+                    Elimina Stanza
+                  </button>
+                )}
+              </div>
+
+              {/* Contatore Connessi */}
+              <div className="flex items-center justify-center sm:justify-start gap-3 bg-black/40 px-4 py-2 rounded-xl border border-emerald-500/30 shadow-inner w-full sm:w-auto">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-sm font-bold text-emerald-400 tracking-wide whitespace-nowrap">
+                  {onlineUsers.length} {onlineUsers.length === 1 ? 'Connesso' : 'Connessi'}
+                </span>
+              </div>
             </div>
-          </div>
 
           <div className="md:col-span-2 flex flex-col gap-6">
             <div className="bg-white/5 backdrop-blur-xl p-10 rounded-3xl border border-white/10 shadow-2xl text-center relative overflow-hidden">
@@ -920,9 +947,9 @@ function App() {
                 </button>
               </div>
 
-              <div className="text-[120px] font-mono font-bold leading-none tracking-tighter mb-12 drop-shadow-2xl">
-                {formatTime(timeLeft)}
-              </div>
+                <div className="text-[70px] sm:text-[90px] md:text-[120px] font-mono font-bold leading-none tracking-tighter mb-8 md:mb-12 drop-shadow-2xl">
+                  {formatTime(timeLeft)}
+                </div>
 
               <div className="flex gap-4 max-w-md mx-auto z-10 relative">
                 <button onClick={toggleTimer} className={`flex-1 py-5 rounded-2xl font-bold text-xl transition-all shadow-lg active:scale-95 border ${isRunning ? 'bg-amber-500 text-black border-amber-400' : 'bg-white text-black border-white'}`}>
