@@ -8,6 +8,7 @@ const POMODORO_SECONDS = 1500;
 const getMascotStage = (roomSeconds) => {
   const xp = Math.floor(roomSeconds / 60); // 60 secondi di focus nella stanza = 1 XP
   
+  
   const stages = [
     { minXp: 0, name: 'Seme Dormiente', visual: '🟤', color: 'text-amber-700' },
     { minXp: 50, name: 'Germoglio', visual: '🌱', color: 'text-emerald-400' },
@@ -49,7 +50,55 @@ const getMascotStage = (roomSeconds) => {
   };
 };
 
+
+const PIXEL_FRUITS = {
+  pomodoro: [
+    [0, 0, 1, 1, 0, 0],
+    [0, 2, 2, 2, 2, 0],
+    [2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2],
+    [0, 2, 2, 2, 2, 0],
+  ],
+  mela_verde: [
+    [0, 0, 1, 0, 0, 0],
+    [0, 3, 3, 3, 3, 0],
+    [3, 3, 3, 3, 3, 3],
+    [3, 3, 3, 3, 3, 3],
+    [0, 3, 3, 3, 3, 0],
+  ],
+  limone: [
+    [0, 0, 0, 0, 0, 0],
+    [0, 4, 4, 4, 4, 0],
+    [4, 4, 4, 4, 4, 4],
+    [4, 4, 4, 4, 4, 4],
+    [0, 4, 4, 4, 4, 0],
+  ]
+};
+
+const COLOR_MAP = {
+  0: 'transparent',
+  1: '#166534', // Picciolo (Verde scuro)
+  2: '#ef4444', // Pomodoro (Rosso)
+  3: '#4ade80', // Mela (Verde chiaro)
+  4: '#facc15', // Limone (Giallo)
+};
+
+const PixelAvatar = ({ type, size = "w-12 h-12" }) => {
+  const pixels = PIXEL_FRUITS[type] || PIXEL_FRUITS.pomodoro;
+  return (
+    <div className={`${size} grid grid-cols-6 gap-0.5`}>
+      {pixels.flat().map((colorIdx, i) => (
+        <div key={i} style={{ backgroundColor: COLOR_MAP[colorIdx] }} className="rounded-sm" />
+      ))}
+    </div>
+  );
+};
+
 function App() {
+
+  const [profile, setProfile] = useState({ nickname: '', avatar_id: 'pomodoro' });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+
   const [session, setSession] = useState(null);
 
   const [rooms, setRooms] = useState([]);
@@ -74,6 +123,36 @@ function App() {
   const [personalStats, setPersonalStats] = useState({ pomodoros: 0, totalSeconds: 0 });
   const [roomStats, setRoomStats] = useState({ pomodoros: 0, totalSeconds: 0 });
   const [globalStats, setGlobalStats] = useState({ pomodoros: 0, totalSeconds: 0 });
+
+
+  useEffect(() => {
+    if (session) fetchProfile();
+  }, [session]);
+
+  const fetchProfile = async () => {
+    if (!session?.user) return; // Protezione: esce se non c'è l'utente
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+
+    if (data) {
+      setProfile({ nickname: data.nickname || '', avatar_id: data.avatar_id || 'pomodoro' });
+    }
+  };
+
+  const saveProfile = async () => {
+    await supabase.from('profiles').upsert({
+      id: session.user.id,
+      nickname: profile.nickname,
+      avatar_id: profile.avatar_id,
+      updated_at: new Date()
+    });
+    setIsEditingProfile(false);
+  };
+
+
 
   const applyAndSaveSettings = async () => {
     let newRemaining = pausedRemainingSec;
@@ -273,6 +352,7 @@ function App() {
   };
 
   const fetchGlobalStats = async () => {
+    if (!session?.user) return; // Protezione
     const { data } = await supabase
       .from('study_history')
       .select('duration_seconds')
@@ -408,14 +488,21 @@ function App() {
           setTimeLeft(payload.new.paused_remaining_sec);
         }
       })
+      // Correzione del mapping degli utenti online
       .on('presence', { event: 'sync' }, () => {
         const presenceState = roomSubscription.presenceState();
-        const users = Object.keys(presenceState).map(key => presenceState[key][0].user_email);
+        // Estraiamo l'intero oggetto (nickname, avatar_id, user_email) memorizzato nel track
+        const users = Object.keys(presenceState).map(key => presenceState[key][0]);
         setOnlineUsers(users);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await roomSubscription.track({ user_email: session.user.email });
+          // IMPORTANTE: Assicurati che il profilo sia caricato prima di tracciare
+          await roomSubscription.track({
+            user_email: session.user.email,
+            nickname: profile.nickname || 'Studente',
+            avatar_id: profile.avatar_id || 'pomodoro'
+          });
         }
       });
 
@@ -613,20 +700,57 @@ function App() {
 
       {!currentRoom ? (
         <main className="max-w-4xl mx-auto mt-12 p-4 w-full">
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div>
-              <h2 className="text-2xl font-bold mb-2 text-white drop-shadow-md">Riepilogo Personale</h2>
-              <p className="text-neutral-400">Totale accumulato in tutte le stanze</p>
-            </div>
-            <div className="flex gap-8 text-center bg-black/30 border border-white/5 backdrop-blur-md p-5 rounded-2xl w-full md:w-auto shadow-inner">
-              <div>
-                <span className="block text-4xl font-bold text-white drop-shadow-lg">{globalStats.pomodoros}</span>
-                <span className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1 block">Pomodori</span>
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl mb-8">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+              <div className="flex items-center gap-6 w-full">
+                <div className="p-4 bg-black/40 rounded-2xl border border-white/10 shadow-inner">
+                  <PixelAvatar type={profile.avatar_id} size="w-20 h-20" />
+                </div>
+
+                <div className="flex-1">
+                  {isEditingProfile ? (
+                    <div className="space-y-4">
+                      <input
+                        className="bg-black/60 border border-white/20 p-2 rounded-lg text-white w-full outline-none focus:ring-1 focus:ring-red-500"
+                        value={profile.nickname}
+                        placeholder="Inserisci nickname..."
+                        onChange={(e) => setProfile({ ...profile, nickname: e.target.value })}
+                      />
+                      <div className="flex gap-4">
+                        {Object.keys(PIXEL_FRUITS).map(id => (
+                          <button
+                            key={id}
+                            onClick={() => setProfile({ ...profile, avatar_id: id })}
+                            className={`p-2 rounded-xl border transition-all ${profile.avatar_id === id ? 'bg-red-600/20 border-red-500' : 'bg-white/5 border-white/10'}`}
+                          >
+                            <PixelAvatar type={id} size="w-8 h-8" />
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={saveProfile} className="bg-emerald-600 px-4 py-2 rounded-lg font-bold text-sm">Salva Profilo</button>
+                    </div>
+                  ) : (
+                    <div>
+                      <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                        {profile.nickname || 'Studente Anonimo'}
+                        <button onClick={() => setIsEditingProfile(true)} className="text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20">Modifica</button>
+                      </h2>
+                      <p className="text-neutral-400 mt-1 uppercase text-xs tracking-tighter font-bold">Grado: {mascot.name}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="w-px bg-white/10"></div>
-              <div>
-                <span className="block text-4xl font-bold text-white drop-shadow-lg">{(globalStats.totalSeconds / 3600).toFixed(1)}h</span>
-                <span className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1 block">Ore totali</span>
+
+              <div className="flex gap-8 text-center bg-black/30 border border-white/5 backdrop-blur-md p-5 rounded-2xl w-full md:w-auto shadow-inner">
+                <div>
+                  <span className="block text-4xl font-bold text-white">{globalStats.pomodoros}</span>
+                  <span className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1 block">Pomodori</span>
+                </div>
+                <div className="w-px bg-white/10"></div>
+                <div>
+                  <span className="block text-4xl font-bold text-white">{(globalStats.totalSeconds / 3600).toFixed(1)}h</span>
+                  <span className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1 block">Ore</span>
+                </div>
               </div>
             </div>
           </div>
@@ -774,16 +898,17 @@ function App() {
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 Connessi Ora
               </h3>
-              <ul className="space-y-3 text-sm text-neutral-300 font-medium">
-                {onlineUsers.map((email, idx) => (
-                  <li key={idx} className="flex items-center gap-3 bg-black/20 p-2.5 rounded-lg border border-white/5">
-                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/50 text-xs text-emerald-400 font-bold">
-                      {email.charAt(0).toUpperCase()}
-                    </div>
-                    {email}
-                  </li>
-                ))}
-              </ul>
+                <ul className="space-y-3 text-sm text-neutral-300 font-medium">
+                  {onlineUsers.map((user, idx) => (
+                    <li key={idx} className="flex items-center gap-3 bg-black/20 p-2.5 rounded-lg border border-white/5">
+                      <PixelAvatar type={user.avatar_id} size="w-6 h-6" />
+                      <div className="flex flex-col">
+                        <span className="font-bold text-white">{user.nickname || 'Anonimo'}</span>
+                        <span className="text-[10px] text-neutral-500">{user.user_email}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
             </div>
 
             <div className="bg-white/5 backdrop-blur-xl p-7 rounded-3xl border border-white/10 shadow-xl">
