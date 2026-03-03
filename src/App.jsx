@@ -51,60 +51,104 @@ const getMascotStage = (roomSeconds) => {
 };
 
 
+// Nuova palette colori integrata:
+// 0 = Trasparente / Sfondo
+// 1 = Verde (gambi, foglie)
+// 2 = Rosso (pomodoro)
+// 3 = Verde chiaro (mela)
+// 4 = Giallo (limone)
+// 5 = Rosso scuro (ciliegie)
+// 6 = Viola (uva)
+// 7 = Giallo brillante (banana)
+// 8 = Marrone scuro (dettagli, punte, piccioli)
+// 9 = Bianco / Colore chiarissimo (riflessi di luce per l'effetto 3D/pixel art avanzata)
+
 const PIXEL_FRUITS = {
   pomodoro: [
-    [0, 0, 1, 1, 0, 0],
-    [0, 2, 2, 2, 2, 0],
-    [2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2],
-    [0, 2, 2, 2, 2, 0],
+    [0, 0, 0, 1, 1, 1, 0, 0, 0],
+    [0, 0, 1, 1, 8, 1, 1, 0, 0],
+    [0, 2, 2, 1, 1, 1, 2, 2, 0],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 9, 9, 2, 2, 2, 2, 2, 2],
+    [2, 9, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [0, 2, 2, 2, 2, 2, 2, 2, 0],
+    [0, 0, 2, 2, 2, 2, 2, 0, 0]
   ],
   mela_verde: [
-    [0, 0, 1, 0, 0, 0],
-    [0, 3, 3, 3, 3, 0],
-    [3, 3, 3, 3, 3, 3],
-    [3, 3, 3, 3, 3, 3],
-    [0, 3, 3, 3, 3, 0],
+    [0, 0, 0, 0, 8, 0, 0, 0, 0],
+    [0, 0, 0, 1, 8, 0, 0, 0, 0],
+    [0, 0, 1, 1, 8, 0, 0, 0, 0],
+    [0, 3, 3, 3, 3, 3, 3, 3, 0],
+    [3, 3, 3, 3, 3, 3, 3, 3, 3],
+    [3, 9, 9, 3, 3, 3, 3, 3, 3],
+    [3, 9, 3, 3, 3, 3, 3, 3, 3],
+    [3, 3, 3, 3, 3, 3, 3, 3, 3],
+    [0, 3, 3, 3, 3, 3, 3, 3, 0],
+    [0, 0, 3, 3, 0, 3, 3, 0, 0]
   ],
   limone: [
-    [0, 0, 0, 0, 0, 0],
-    [0, 4, 4, 4, 4, 0],
-    [4, 4, 4, 4, 4, 4],
-    [4, 4, 4, 4, 4, 4],
-    [0, 4, 4, 4, 4, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 1, 1, 0, 0, 0, 0],
+    [0, 0, 4, 4, 4, 4, 0, 0, 0],
+    [0, 4, 4, 4, 4, 4, 4, 4, 0],
+    [4, 4, 9, 9, 4, 4, 4, 4, 4],
+    [4, 4, 9, 4, 4, 4, 4, 4, 4],
+    [4, 4, 4, 4, 4, 4, 4, 4, 4],
+    [0, 4, 4, 4, 4, 4, 4, 4, 0],
+    [0, 0, 4, 4, 4, 4, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0]
   ],
   ciliegie: [
-    [0, 0, 1, 0, 1, 0], // Sommità dei gambi
-    [0, 1, 0, 1, 0, 0], // Gambi che scendono
-    [5, 5, 0, 5, 5, 0], // Parte superiore dei frutti
-    [5, 5, 5, 5, 5, 5], // Corpo dei frutti
-    [0, 5, 5, 0, 5, 5], // Base dei frutti
+    [0, 0, 0, 0, 1, 1, 0, 0, 0],
+    [0, 0, 0, 1, 0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0, 0, 0, 1, 0],
+    [0, 1, 0, 0, 0, 0, 0, 1, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [5, 5, 0, 0, 0, 0, 5, 5, 0],
+    [5, 5, 5, 0, 0, 5, 5, 5, 5],
+    [5, 9, 5, 0, 0, 5, 9, 5, 5],
+    [5, 5, 5, 0, 0, 5, 5, 5, 5],
+    [0, 5, 0, 0, 0, 0, 5, 5, 0]
   ],
   uva: [
-    [0, 0, 1, 1, 0, 0], // Picciolo
-    [0, 6, 6, 6, 6, 0], // Parte superiore grappolo
-    [6, 6, 6, 6, 6, 6], // Corpo del grappolo
-    [0, 6, 6, 6, 6, 0], // Si stringe
-    [0, 0, 6, 6, 0, 0], // Punta del grappolo
+    [0, 0, 0, 0, 8, 0, 0, 0, 0],
+    [0, 0, 0, 1, 8, 1, 0, 0, 0],
+    [0, 0, 6, 6, 6, 6, 6, 0, 0],
+    [0, 6, 9, 6, 6, 9, 6, 6, 0],
+    [0, 6, 6, 6, 6, 6, 6, 6, 0],
+    [0, 0, 6, 9, 6, 6, 9, 0, 0],
+    [0, 0, 6, 6, 6, 6, 6, 0, 0],
+    [0, 0, 0, 6, 9, 6, 0, 0, 0],
+    [0, 0, 0, 6, 6, 6, 0, 0, 0],
+    [0, 0, 0, 0, 6, 0, 0, 0, 0]
   ],
   banana: [
-    [0, 0, 0, 0, 1, 0], // Picciolo superiore
-    [0, 0, 0, 7, 7, 0], // Inizio curva
-    [0, 0, 7, 7, 0, 0], // Corpo centrale
-    [0, 7, 7, 0, 0, 0], // Parte inferiore
-    [0, 1, 0, 0, 0, 0], // Punta scura
+    [0, 0, 0, 0, 0, 0, 0, 1, 8],
+    [0, 0, 0, 0, 0, 0, 7, 7, 0],
+    [0, 0, 0, 0, 0, 7, 7, 0, 0],
+    [0, 0, 0, 0, 7, 7, 0, 0, 0],
+    [0, 0, 0, 7, 9, 7, 0, 0, 0],
+    [0, 0, 7, 9, 7, 0, 0, 0, 0],
+    [0, 7, 9, 7, 0, 0, 0, 0, 0],
+    [0, 7, 7, 0, 0, 0, 0, 0, 0],
+    [8, 7, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0]
   ]
 };
 
 const COLOR_MAP = {
-  0: 'transparent',
-  1: '#166534', // Verde scuro/Picciolo
-  2: '#ef4444', // Rosso pomodoro
-  3: '#4ade80', // Verde mela
-  4: '#facc15', // Giallo limone
-  5: '#991b1b', // Rosso ciliegia
-  6: '#8b5cf6', // Viola uva
-  7: '#fde047', // Giallo banana (Bright Yellow)
+  0: 'transparent', // Sfondo vuoto
+  1: '#16a34a',     // Verde (gambi e foglie)
+  2: '#ef4444',     // Rosso pomodoro (Red-500)
+  3: '#4ade80',     // Verde mela (Green-400)
+  4: '#fde047',     // Giallo limone (Yellow-300)
+  5: '#991b1b',     // Rosso scuro ciliegia (Red-800)
+  6: '#8b5cf6',     // Viola uva (Violet-500)
+  7: '#fef08a',     // Giallo brillante banana (Yellow-200)
+  8: '#713f12',     // Marrone scuro (piccioli e dettagli legnosi)
+  9: '#ffffff',     // Bianco (riflessi di luce e brillantezza)
 };
 
 const PixelAvatar = ({ type, size = "w-12" }) => {
@@ -112,17 +156,17 @@ const PixelAvatar = ({ type, size = "w-12" }) => {
 
   return (
     <div
-      className={`${size} grid grid-cols-6 gap-0.5`}
+      className={`${size} grid grid-cols-9 gap-px`}
       style={{
-        aspectRatio: '6 / 5',
-        height: 'auto' // Impedisce a classi come h-12 di distorcere l'altezza
+        aspectRatio: '9 / 10',
+        height: 'auto'
       }}
     >
       {pixels.flat().map((colorIdx, i) => (
         <div
           key={i}
           style={{ backgroundColor: COLOR_MAP[colorIdx] }}
-          className="rounded-sm"
+          className="rounded-[1px]"
         />
       ))}
     </div>
@@ -1002,24 +1046,25 @@ function App() {
               </div>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-xl p-7 rounded-3xl border border-white/10 shadow-xl">
-              <h3 className="text-sm font-bold text-emerald-400 mb-5 border-b border-white/10 pb-3 uppercase tracking-widest flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Connessi Ora
-              </h3>
-                <ul className="space-y-3 text-sm text-neutral-300 font-medium">
+              <div className="bg-white/5 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-xl">
+                <h3 className="text-[11px] font-bold text-emerald-400 mb-4 border-b border-white/10 pb-2 uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Connessi Ora
+                </h3>
+                <ul className="space-y-2 text-xs text-neutral-300 font-medium">
                   {onlineUsers.map((user, idx) => (
-                    <li key={idx} className="flex items-center gap-3 bg-black/20 p-2.5 rounded-lg border border-white/5">
-                      <PixelAvatar type={user.avatar_id} size="w-6 h-6" />
-                      <div className="flex flex-col">
-                        <span className="font-bold text-white">{user.nickname || 'Anonimo'}</span>
-                        <span className="text-[10px] text-neutral-500">{user.user_email}</span>
+                    <li key={idx} className="flex items-center gap-2.5 bg-black/20 p-2 rounded-md border border-white/5">
+                      <PixelAvatar type={user.avatar_id} size="w-7" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-white truncate leading-tight">{user.nickname || 'Anonimo'}</span>
+                        <span className="text-[9px] text-neutral-500 truncate">{user.user_email}</span>
                       </div>
                     </li>
                   ))}
                 </ul>
-            </div>
+              </div>
 
+              
             <div className="bg-white/5 backdrop-blur-xl p-7 rounded-3xl border border-white/10 shadow-xl">
               <h3 className="text-sm font-bold text-neutral-400 mb-5 border-b border-white/10 pb-3 uppercase tracking-widest">
                 Statistiche Stanza
