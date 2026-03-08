@@ -1,17 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-//tutto questo dipende da session
 export const useProfile = (session) => {
-
     const [profile, setProfile] = useState({ nickname: '', avatar_id: 'pomodoro' });
     const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [loading, setLoading] = useState(true);
 
-    const [loading, setLoading] = useState(true); //nuovo: si usa quando si sposta da monolite a hooks
-    //MA SOLO NEGLI HOOK CHE DEVONO LEGGERE DATI ASINCRONI SCONOSCIUTI
-    //motivo: latenza delle chiamate -> uso spinner
-
-    //recupera informazioni del profilo dalla tabella profiles nel database
+    // Recupera i dati dal database 'profiles'
     const fetchProfile = async () => {
         if (!session?.user) return;
 
@@ -36,12 +31,6 @@ export const useProfile = (session) => {
         }
     };
 
-      //hook per side effect: se cambia stato di auth (utente loggato) allora fetcho il profilo
-      useEffect(() => {
-        if (session) fetchProfile();
-    }, [session]);
-
-
     // Salva le modifiche (Upsert)
     const saveProfile = async () => {
         if (!session?.user) return;
@@ -60,10 +49,10 @@ export const useProfile = (session) => {
         }
     };
 
-
+    // Sincronizzazione al cambio sessione
     useEffect(() => {
         if (session) fetchProfile();
-    }, [session]);    
+    }, [session]);
 
     return {
         profile,
@@ -71,6 +60,6 @@ export const useProfile = (session) => {
         isEditingProfile,
         setIsEditingProfile,
         saveProfile,
-        loading,
+        loading
     };
-}
+};

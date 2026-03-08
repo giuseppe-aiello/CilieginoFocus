@@ -3,6 +3,7 @@ import { useTimer } from '../hooks/useTimer';
 import { useStats } from '../hooks/useStats';
 import PixelAvatar from '../components/PixelAvatar';
 import SettingsModal from '../components/SettingsModal';
+import { getMascotStage } from '../utils/mascot';
 
 export default function Room({
     roomName,
@@ -22,10 +23,13 @@ export default function Room({
         isRunning,
         mode,
         toggleTimer,
+        resetTimer,
         switchMode,
+        pauseTimer, // funzione per pausa quando stanza vuota
         setPausedRemainingSec,
         setTimeLeft
     } = useTimer(session, roomName, roomSettings, (completedMode, autoStarted) => {
+    // ... (resto invariato)
         fetchStats();
         if (!autoStarted) {
             alert(completedMode === 'study' ? "Sessione completata! Inizia la pausa." : "Pausa terminata! Torna a studiare.");
@@ -33,17 +37,40 @@ export default function Room({
     });
 
     const applyAndSaveSettings = async (draftSettings) => {
-        let newRemaining = timeLeft;
-
-        if (!isRunning) {
-            newRemaining = mode === 'study' ? draftSettings.studyDurationSec : draftSettings.breakDurationSec;
-            setPausedRemainingSec(newRemaining);
-            setTimeLeft(newRemaining);
-        }
-
-        await updateRoomSettingsInDb(draftSettings, newRemaining);
+        // Salva le nuove impostazioni nel database senza modificare il timeLeft o il pausedRemainingSec attuali
+        await updateRoomSettingsInDb(draftSettings, isRunning ? pausedRemainingSec : timeLeft);
         setShowSettings(false);
     };
+
+    // Gestisce l'uscita tramite il bottone
+    const handleExitRoom = async () => {
+        // Se c'è solo un utente (o zero) e il timer sta scorrendo, metti in pausa
+        if (onlineUsers.length <= 1 && isRunning) {
+            await pauseTimer();
+        }
+        onLeave();
+    };
+
+    // Gestisce la chiusura improvvisa della scheda/browser
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            if (onlineUsers.length <= 1 && isRunning) {
+                // Invia una richiesta "fire-and-forget" al database per mettere in pausa
+                supabase.from('pomodoro_sessions').update({
+                    is_running: false,
+                    target_end_time: null,
+                    paused_remaining_sec: timeLeft,
+                    last_updated_at: new Date()
+                }).eq('room_name', roomName).then();
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [onlineUsers.length, isRunning, timeLeft, roomName]);
 
     const formatTime = (seconds) => {
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -55,6 +82,10 @@ export default function Room({
         ? ((roomSettings.studyDurationSec - timeLeft) / roomSettings.studyDurationSec) * 100
         : ((roomSettings.breakDurationSec - timeLeft) / roomSettings.breakDurationSec) * 100;
 
+    // Genera lo stato corrente della mascotte passando i secondi della stanza
+    const mascot = getMascotStage(roomStats.totalSeconds);
+
+        
     return (
         <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
             {/* HEADER STANZA */}
@@ -63,7 +94,7 @@ export default function Room({
                     <span className="text-red-500">📍</span> {roomName}
                 </h2>
                 <button
-                    onClick={onLeave}
+                    onClick={handleExitRoom} // <-- Sostituisci onLeave con handleExitRoom
                     className="px-4 py-2 bg-white/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-xl font-bold transition-all border border-transparent hover:border-red-500/50"
                 >
                     Esci dalla Stanza
@@ -115,11 +146,11 @@ export default function Room({
                         </button>
 
                         <button
-                            onClick={() => switchMode(mode === 'study' ? 'break' : 'study')}
+                            onClick={resetTimer}
                             className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-xl transition-all active:scale-95"
-                            title="Salta al prossimo ciclo"
+                            title="Resetta Timer"
                         >
-                            ⏭
+                            🔄
                         </button>
 
                         <button
@@ -134,6 +165,38 @@ export default function Room({
 
                 {/* COLONNA DESTRA: SIDEBAR (Utenti e Statistiche) */}
                 <div className="flex flex-col gap-6">
+                    {/* Ciliegino della Stanza (Mascotte) */}
+                    <div className="bg-white/5 backdrop-blur-xl p-7 rounded-3xl border border-white/10 shadow-xl relative overflow-hidden">
+                        <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
+
+                        <h3 className="text-sm font-bold text-neutral-400 mb-5 border-b border-white/10 pb-3 uppercase tracking-widest">
+                            Ciliegino della Stanza
+                        </h3>
+
+                        <div className="flex flex-col items-center justify-center text-center">
+                            <div className="text-6xl mb-3 filter drop-shadow-xl animate-bounce" style={{ animationDuration: '3s' }}>
+                                {mascot.visual}
+                            </div>
+                            <h4 className={`text-xl font-bold ${mascot.color} drop-shadow-md`}>
+                                {mascot.name}
+                            </h4>
+                            <div className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1 mb-5">
+                                Livello {mascot.level}
+                            </div>
+
+                            <div className="w-full bg-black/40 rounded-full h-3 border border-white/5 shadow-inner relative overflow-hidden">
+                                <div
+                                    className="bg-gradient-to-r from-red-600 to-red-400 h-full rounded-full transition-all duration-1000 ease-out"
+                                    style={{ width: `${mascot.progress}%` }}
+                                ></div>
+                            </div>
+
+                            <div className="flex justify-between w-full mt-2 text-xs font-medium text-neutral-500">
+                                <span>{mascot.xp} XP</span>
+                                <span>{mascot.isMaxLevel ? 'MAX' : `${mascot.nextXp} XP`}</span>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Utenti Online */}
                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
@@ -161,23 +224,20 @@ export default function Room({
                     {/* Statistiche Stanza */}
                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6 flex-1">
                         <h3 className="text-neutral-400 font-bold uppercase tracking-widest text-sm mb-4 border-b border-white/10 pb-2">
-                            Rendimento
+                            Rendimento della Stanza
                         </h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-black/40 p-4 rounded-2xl border border-white/5 text-center">
-                                <div className="text-3xl font-black text-red-500 mb-1">{personalStats.pomodoros}</div>
-                                <div className="text-xs text-neutral-500 uppercase tracking-wider font-bold">I tuoi Pomodori</div>
+                                <div className="text-3xl font-black text-red-500 mb-1">{roomStats.pomodoros}</div>
+                                <div className="text-xs text-neutral-500 uppercase tracking-wider font-bold">Pomodori</div>
                             </div>
                             <div className="bg-black/40 p-4 rounded-2xl border border-white/5 text-center">
-                                <div className="text-3xl font-black text-emerald-500 mb-1">{Math.floor(personalStats.totalSeconds / 60)}</div>
-                                <div className="text-xs text-neutral-500 uppercase tracking-wider font-bold">Minuti Totali</div>
-                            </div>
-                            <div className="col-span-2 bg-black/40 p-4 rounded-2xl border border-white/5 flex justify-between items-center mt-2">
-                                <div className="text-xs text-neutral-500 uppercase tracking-wider font-bold">Pomodori di Gruppo</div>
-                                <div className="text-xl font-black text-white">{roomStats.pomodoros}</div>
+                                <div className="text-3xl font-black text-emerald-500 mb-1">{Math.floor(roomStats.totalSeconds / 60)}</div>
+                                <div className="text-xs text-neutral-500 uppercase tracking-wider font-bold">Minuti</div>
                             </div>
                         </div>
                     </div>
+
                 </div>
 
             </div>

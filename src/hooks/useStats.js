@@ -33,15 +33,38 @@ export const useStats = (session, currentRoom) => {
             .from('study_history')
             .select('duration_seconds')
             .eq('user_id', session.user.id);
+            
+        setPersonalStats(calcStats(personalData));
 
         // Storico collettivo della stanza
         const { data: roomData } = await supabase
             .from('study_history')
             .select('duration_seconds')
             .eq('room_name', currentRoom);
+        if (roomData) {
+            // Usiamo una Mappa: se 5 utenti hanno inserito lo stesso cycle_id, 
+            // la mappa terrà un solo record per quell'ID.
+            const uniqueCycles = new Map();
 
-        setPersonalStats(calcStats(personalData));
-        setRoomStats(calcStats(roomData));
+            roomData.forEach(record => {
+                // Se il record non ha cycle_id (vecchi dati), genera una chiave casuale per contarlo comunque
+                const key = record.cycle_id || Math.random().toString();
+                uniqueCycles.set(key, record.duration_seconds);
+            });
+
+            // Somma la durata solo dei cicli unici
+            let totalUniqueSeconds = 0;
+            uniqueCycles.forEach(duration => {
+                totalUniqueSeconds += duration;
+            });
+
+            setRoomStats({
+                pomodoros: uniqueCycles.size, // Il numero di record unici nella Mappa
+                totalSeconds: totalUniqueSeconds
+            });
+        } else {
+            setRoomStats({ pomodoros: 0, totalSeconds: 0 });
+        }
     }, [session, currentRoom]);
 
     // Ascoltatore per la Lobby: si attiva quando c'è sessione ma non c'è stanza

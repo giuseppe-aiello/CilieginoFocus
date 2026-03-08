@@ -1,19 +1,105 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 const alarmSound = new Audio('/rooster.wav');
 
-export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
-
-    const [timeLeft, setTimeLeft] = useState(1500); // Variabile puramente visiva
+export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) => {
+    const [timeLeft, setTimeLeft] = useState(1500);
     const [isRunning, setIsRunning] = useState(false);
     const [targetEndTime, setTargetEndTime] = useState(null);
     const [pausedRemainingSec, setPausedRemainingSec] = useState(1500);
-    const [mode, setMode] = useState('study'); // 'study' o 'break'
+    const [mode, setMode] = useState('study');
+
+    const workerRef = useRef(null);
+    const logicRef = useRef(null);
+
+    // Mantiene un riferimento aggiornato all'ambiente attuale per quando il Worker scatta a zero
+    useEffect(() => {
+        logicRef.current = { handlePomodoroComplete };
+    });
+
+    // 1. INIZIALIZZAZIONE DEL WEB WORKER
+    useEffect(() => {
+        // Sintassi specifica di Vite per caricare un Worker
+        workerRef.current = new Worker(new URL('../workers/timerWorker.js', import.meta.url), { type: 'module' });
+
+        // Ascolta le risposte dal Worker
+        workerRef.current.onmessage = (e) => {
+            if (e.data.type === 'tick') {
+                setTimeLeft(e.data.remaining); // Aggiorna i secondi a schermo
+            } else if (e.data.type === 'finished') {
+                // Esegue la logica di fine ciclo
+                logicRef.current.handlePomodoroComplete();
+            }
+        };
+
+        return () => {
+            workerRef.current.terminate(); // Distrugge il processo in background quando chiudi la stanza
+        };
+    }, []);
+
+    // 2. SINCRONIZZAZIONE INIZIALE E REALTIME DEL TIMER (Dal Database)
+    useEffect(() => {
+        if (!currentRoom) return;
+
+        const initializeTimer = async () => {
+            const { data, error } = await supabase
+                .from('pomodoro_sessions')
+                .select('mode, is_running, target_end_time, paused_remaining_sec')
+                .eq('room_name', currentRoom)
+                .single();
+
+            if (data && !error) {
+                setMode(data.mode || 'study');
+                setIsRunning(data.is_running);
+                setTargetEndTime(data.target_end_time);
+                setPausedRemainingSec(data.paused_remaining_sec);
+
+                if (data.is_running && data.target_end_time) {
+                    const remaining = Math.max(0, Math.ceil((new Date(data.target_end_time).getTime() - Date.now()) / 1000));
+                    setTimeLeft(remaining);
+                } else {
+                    setTimeLeft(data.paused_remaining_sec);
+                }
+            }
+        };
+
+        initializeTimer();
+
+        const timerSubscription = supabase.channel(`timer-${currentRoom}`)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pomodoro_sessions', filter: `room_name=eq.${currentRoom}` }, (payload) => {
+                const newData = payload.new;
+                setMode(newData.mode || 'study');
+                setIsRunning(newData.is_running);
+                setTargetEndTime(newData.target_end_time);
+                setPausedRemainingSec(newData.paused_remaining_sec);
+
+                if (newData.is_running && newData.target_end_time) {
+                    const remaining = Math.max(0, Math.ceil((new Date(newData.target_end_time).getTime() - Date.now()) / 1000));
+                    setTimeLeft(remaining);
+                } else {
+                    setTimeLeft(newData.paused_remaining_sec);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(timerSubscription);
+        };
+    }, [currentRoom]);
 
 
-    const timerRef = useRef(null);
-
+    // 3. INVIO COMANDI AL WORKER QUANDO LO STATO CAMBIA
+    useEffect(() => {
+        if (isRunning && targetEndTime) {
+            // Ordina al worker di iniziare a contare in background
+            workerRef.current.postMessage({ command: 'start', targetEndTime });
+        } else {
+            // Ordina al worker di fermarsi
+            workerRef.current.postMessage({ command: 'stop' });
+            setTimeLeft(pausedRemainingSec);
+        }
+    }, [isRunning, targetEndTime, pausedRemainingSec]);
 
 
     const switchMode = async (newMode) => {
@@ -33,8 +119,6 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
         }).eq('room_name', currentRoom);
     };
 
-
-    //PAUSA / AVVIA
     const toggleTimer = async () => {
         const newIsRunning = !isRunning;
         setIsRunning(newIsRunning);
@@ -42,17 +126,17 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
         let newTarget = null;
         let newPausedSec = pausedRemainingSec;
 
-        if (newIsRunning) { //se è in esecuzione abbiamo bisogno target time e abbiamo appena switchato a in esecuzione
+        if (newIsRunning) {
             newTarget = new Date(Date.now() + pausedRemainingSec * 1000).toISOString();
             setTargetEndTime(newTarget);
-        } else { //se è in pausa non
+        } else {
             const remaining = targetEndTime
                 ? Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000))
                 : pausedRemainingSec;
 
             newPausedSec = remaining;
             setPausedRemainingSec(remaining);
-            setTimeLeft(remaining); //tempo che si modifica ogni secondop
+            setTimeLeft(remaining);
             setTargetEndTime(null);
         }
 
@@ -64,10 +148,8 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
         }).eq('room_name', currentRoom);
     };
 
-
     const resetTimer = async () => {
-        clearInterval(timerRef.current); //interrompe ciclo continuo (non comprende re render interfaccia ->)
-        setIsRunning(false); //aggiornamento interfaccia (rerender interfaccia)
+        setIsRunning(false);
 
         const { data: currentData, error: readError } = await supabase
             .from('pomodoro_sessions')
@@ -77,18 +159,14 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
 
         if (readError) return;
 
-        const NEW_STUDY = currentData.study_duration_sec
-        const NEW_BREAK = currentData.break_duration_sec
-
-        // Sceglie il valore in base alla modalità attuale
+        const NEW_STUDY = currentData.study_duration_sec;
+        const NEW_BREAK = currentData.break_duration_sec;
         const resetSecs = mode === 'study' ? NEW_STUDY : NEW_BREAK;
 
-        // Aggiorna lo stato locale
         setTimeLeft(resetSecs);
         setPausedRemainingSec(resetSecs);
         setTargetEndTime(null);
 
-        // Aggiorna il database per sincronizzare tutti gli utenti della stanza
         await supabase.from('pomodoro_sessions').update({
             is_running: false,
             target_end_time: null,
@@ -99,17 +177,14 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
 
     const handlePomodoroComplete = async () => {
         setIsRunning(false);
-        clearInterval(timerRef.current);
 
-        // RIPRODUZIONE AUDIO A FINE TIMER
         try {
-            alarmSound.currentTime = 0; // Ripristina l'audio all'inizio
+            alarmSound.currentTime = 0;
             alarmSound.play();
         } catch (error) {
             console.error("Il browser ha bloccato l'audio in autoplay:", error);
         }
 
-        // Notifica Web nativa (Popup di sistema)
         if ('Notification' in window && Notification.permission === 'granted') {
             const isStudy = mode === 'study';
             const notifTitle = isStudy ? "Sessione Terminata! BRAVA CICCIOBARULLA 🍅" : "Pausa Finita! Adesso è ora di studiare cicciobarulla... 📚";
@@ -124,10 +199,16 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
         }
 
         if (mode === 'study') {
+            // Implementazione dell'Identificativo Condiviso per deduplicare i dati nel DB e annullare il lag visivo
+            const syncTime = targetEndTime || new Date(Math.floor(Date.now() / 10000) * 10000).toISOString();
+            const cycleId = `${currentRoom}_${syncTime}`;
+
             await supabase.from('study_history').insert([{
                 user_id: session.user.id,
                 room_name: currentRoom,
-                duration_seconds: roomSettings.studyDurationSec
+                duration_seconds: roomSettings.studyDurationSec,
+                cycle_id: cycleId,
+                created_at: syncTime // Sovrascrive l'orologio del server con il tempo ideale calcolato dal Worker
             }]);
         }
 
@@ -137,7 +218,7 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
 
         let newTarget = null;
         if (shouldAutoStart) {
-            newTarget = new Date(Date.now() + nextDurationSec * 1000).toISOString(); //IN MILLISECONDI perchè gestisce in millisecondi
+            newTarget = new Date(Date.now() + nextDurationSec * 1000).toISOString();
             setTargetEndTime(newTarget);
         }
 
@@ -154,30 +235,34 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
             last_updated_at: new Date()
         }).eq('room_name', currentRoom);
 
-        fetchStats();
+        onTimerComplete(mode, shouldAutoStart);
     };
+    
+    // Nuova funzione per forzare la pausa
+    const pauseTimer = async () => {
+        if (!isRunning) return;
 
+        const remaining = targetEndTime
+            ? Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000))
+            : pausedRemainingSec;
 
-    useEffect(() => {
-        if (isRunning && targetEndTime) {
-            timerRef.current = setInterval(() => {
-                const remaining = Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000));
-                setTimeLeft(remaining);
+        setIsRunning(false);
+        setPausedRemainingSec(remaining);
+        setTimeLeft(remaining);
+        setTargetEndTime(null);
 
-                if (remaining <= 0) {
-                    clearInterval(timerRef.current);
-                    handlePomodoroComplete();
-                }
-            }, 1000);
-        } else {
-            clearInterval(timerRef.current);
-            setTimeLeft(pausedRemainingSec);
+        // Ferma il Web Worker
+        if (workerRef.current) {
+            workerRef.current.postMessage({ command: 'stop' });
         }
 
-        return () => clearInterval(timerRef.current);
-    }, [isRunning, targetEndTime, pausedRemainingSec]);
-
-
+        await supabase.from('pomodoro_sessions').update({
+            is_running: false,
+            target_end_time: null,
+            paused_remaining_sec: remaining,
+            last_updated_at: new Date()
+        }).eq('room_name', currentRoom);
+    };
 
     return {
         timeLeft,
@@ -186,10 +271,11 @@ export const useTimer = (session, currentRoom, roomSettings, fetchStats) => {
         toggleTimer,
         resetTimer,
         switchMode,
+        pauseTimer, // <-- Aggiungi l'esportazione qui
         setIsRunning,
         setMode,
         setTargetEndTime,
         setPausedRemainingSec,
         setTimeLeft
-    }
-}
+    };
+};
