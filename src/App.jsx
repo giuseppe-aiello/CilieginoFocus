@@ -132,11 +132,21 @@ export default function App() {
         <>
             {showLoading && (
                 <div className="fixed inset-0 z-[100] bg-[#09090b] flex items-center justify-center text-white transition-opacity duration-300">
-                    <div className="relative flex flex-col items-center gap-6">
-                        <div className="absolute inset-0 rounded-full bg-red-600/20 animate-ping scale-150"></div>
-                        <div className="relative bg-black/50 border border-white/10 p-5 rounded-2xl shadow-[0_0_50px_rgba(220,38,38,0.3)]">
-                            <span className="text-4xl">🍒</span>
+                    <div className="flex flex-col items-center gap-6">
+
+                        {/* Contenitore relativo con proporzioni quadrate esatte (w-24 h-24) */}
+                        <div className="relative w-24 h-24 flex items-center justify-center">
+
+                            {/* Pulsazione che eredita la forma circolare perfetta (rounded-full) */}
+                            <div className="absolute inset-0 rounded-full bg-red-600/20 animate-ping"></div>
+
+                            {/* Sfondo centrale trasformato in un cerchio perfetto */}
+                            <div className="relative w-full h-full bg-black/50 border border-white/10 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(220,38,38,0.3)]">
+                                <span className="text-4xl">🍒</span>
+                            </div>
+
                         </div>
+
                         <p className="text-red-200/60 font-bold tracking-[0.2em] uppercase text-xs animate-pulse">
                             Sincronizzazione...
                         </p>
