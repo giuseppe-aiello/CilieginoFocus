@@ -6,17 +6,13 @@ export default function PixelAvatar({ type, size = "w-12" }) {
 
     return (
         <div
-            className={`${size} grid grid-cols-9 gap-px`}
-            style={{
-                aspectRatio: '9 / 10',
-                height: 'auto'
-            }}
+            className={`${size} aspect-square grid grid-cols-10 gap-px`}
         >
             {pixels.flat().map((colorIdx, i) => (
                 <div
                     key={i}
                     style={{ backgroundColor: COLOR_MAP[colorIdx] }}
-                    className="rounded-[1px]"
+                    className="w-full h-full rounded-[1px]"
                 />
             ))}
         </div>

@@ -87,10 +87,13 @@ export const useRoom = (session, profile) => {
         setRoomCreator(null);
     };
 
-    const deleteRoom = async () => {
-        const input = window.prompt(`Per eliminare definitivamente la stanza, digita il suo nome esatto: "${currentRoom}"`);
+    const deleteRoom = async (targetRoomName) => {
+        // Se non c'è un nome bersaglio, interrompi
+        if (!targetRoomName) return;
 
-        if (input !== currentRoom) {
+        const input = window.prompt(`Per eliminare definitivamente la stanza, digita il suo nome esatto: "${targetRoomName}"`);
+
+        if (input !== targetRoomName) {
             if (input !== null) alert("Il nome inserito non corrisponde. Eliminazione annullata.");
             return;
         }
@@ -98,9 +101,12 @@ export const useRoom = (session, profile) => {
         await supabase
             .from('pomodoro_sessions')
             .delete()
-            .eq('room_name', currentRoom);
+            .eq('room_name', targetRoomName);
 
-        leaveRoom();
+        // Se per qualche motivo l'utente ha forzato l'eliminazione della stanza in cui si trova, lo facciamo uscire
+        if (currentRoom === targetRoomName) {
+            leaveRoom();
+        }
     };
 
     // 3. SINCRONIZZAZIONE REALTIME DELLA STANZA (PRESENCE E SETTINGS)
