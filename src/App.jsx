@@ -106,7 +106,8 @@ export default function App() {
             } catch (error) {
                 console.error("Errore Spotify:", error);
             } finally {
-                window.history.replaceState({}, document.title, window.location.pathname);
+                // src/App.jsx (dentro fetchSpotifyToken, blocco finally)
+                window.history.replaceState({}, document.title, '/');
                 setAppLoading(false);
             }
         };

@@ -15,6 +15,9 @@ export default function SpotifyPlayer({ token, roomName, isHost }) {
         albumArt: ""
     });
 
+
+    const lastSpotifyUpdate = useRef(null);
+
     const isReady = useRef(false);
 
     // 1. INIZIALIZZAZIONE DELLA WEB PLAYBACK SDK
@@ -95,6 +98,7 @@ export default function SpotifyPlayer({ token, roomName, isHost }) {
                 .single();
 
             if (data) {
+                lastSpotifyUpdate.current = data.spotify_updated_at;
                 setTrackUri(data.spotify_track_uri || trackUri);
                 setIsPlaying(data.spotify_is_playing || false);
 
@@ -115,6 +119,16 @@ export default function SpotifyPlayer({ token, roomName, isHost }) {
         const subscription = supabase.channel(`spotify-${roomName}`)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pomodoro_sessions', filter: `room_name=eq.${roomName}` }, (payload) => {
                 const newData = payload.new;
+
+
+                // Controllo di blocco: Se il timestamp di Spotify non è cambiato, interrompi l'esecuzione
+                if (newData.spotify_updated_at === lastSpotifyUpdate.current) {
+                    return;
+                }
+
+                // Aggiorna il riferimento con il nuovo timestamp
+                lastSpotifyUpdate.current = newData.spotify_updated_at;
+                
                 setTrackUri(newData.spotify_track_uri);
                 setIsPlaying(newData.spotify_is_playing);
 
