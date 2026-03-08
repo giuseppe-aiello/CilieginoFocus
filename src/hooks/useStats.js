@@ -74,7 +74,7 @@ export const useStats = (session, currentRoom) => {
         // Storico collettivo della stanza
         const { data: roomData } = await supabase
             .from('study_history')
-            .select('duration_seconds','cycle_id')
+            .select('duration_seconds, cycle_id')
             .eq('room_name', currentRoom);
         if (roomData) {
             // Usiamo una Mappa: se 5 utenti hanno inserito lo stesso cycle_id, 

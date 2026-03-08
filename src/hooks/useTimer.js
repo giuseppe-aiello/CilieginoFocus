@@ -208,7 +208,7 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
                 room_name: currentRoom,
                 duration_seconds: roomSettings.studyDurationSec,
                 cycle_id: cycleId,
-                created_at: syncTime // Sovrascrive l'orologio del server con il tempo ideale calcolato dal Worker
+                completed_at: syncTime // Sovrascrive l'orologio del server con il tempo ideale calcolato dal Worker
             }]);
         }
 
@@ -237,7 +237,7 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
 
         onTimerComplete(mode, shouldAutoStart);
     };
-    
+
     // Nuova funzione per forzare la pausa
     const pauseTimer = async () => {
         if (!isRunning) return;
