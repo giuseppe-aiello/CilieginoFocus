@@ -4,6 +4,8 @@ import PixelAvatar from '../components/PixelAvatar';
 import { PIXEL_FRUITS } from '../utils/pixelArt';
 import { useStats } from '../hooks/useStats';
 import StudyHeatmap from '../components/StudyHeatmap';
+import { loginWithSpotify } from '../utils/spotify';
+
 
 export default function Lobby({
     session,
@@ -60,12 +62,28 @@ export default function Lobby({
                                 <>
                                     <h2 className="text-2xl font-black tracking-tight mb-1">{profile?.nickname || 'Nuovo Studente'}</h2>
                                     <p className="text-sm text-neutral-400 mb-6">{session?.user?.email}</p>
-                                    <button
-                                        onClick={() => setIsEditingProfile(true)}
-                                        className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all border border-white/5"
-                                    >
-                                        Modifica Profilo
-                                    </button>
+
+                                    <div className="flex flex-col gap-2 w-full">
+                                        <button
+                                            onClick={() => setIsEditingProfile(true)}
+                                            className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all border border-white/5"
+                                        >
+                                            Modifica Profilo
+                                        </button>
+
+                                        {!localStorage.getItem('spotify_access_token') ? (
+                                            <button
+                                                onClick={loginWithSpotify}
+                                                className="w-full py-2.5 bg-[#1db954] hover:bg-[#1ed760] text-black rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2"
+                                            >
+                                                <span className="text-lg">🎧</span> Collega Spotify
+                                            </button>
+                                        ) : (
+                                            <div className="w-full py-2.5 bg-[#1db954]/20 border border-[#1db954]/30 text-[#1db954] rounded-xl font-bold text-center flex items-center justify-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-[#1db954]"></span> Spotify Connesso
+                                            </div>
+                                        )}
+                                    </div>
                                 </>
                             ) : (
                                 <div className="w-full flex flex-col gap-4">

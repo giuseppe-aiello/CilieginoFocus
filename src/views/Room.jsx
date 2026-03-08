@@ -4,6 +4,7 @@ import { useStats } from '../hooks/useStats';
 import PixelAvatar from '../components/PixelAvatar';
 import SettingsModal from '../components/SettingsModal';
 import { getMascotStage } from '../utils/mascot';
+import SpotifyPlayer from '../components/SpotifyPlayer'; // <-- Importazione del Player
 
 export default function Room({
     roomName,
@@ -13,9 +14,18 @@ export default function Room({
     onlineUsers,
     onLeave,
     updateRoomSettingsInDb,
-    setIsLoading // <-- RECUPERATO DALLE PROPS
+    setIsLoading
 }) {
     const [showSettings, setShowSettings] = useState(false);
+
+    // Recupero del token di Spotify dal Local Storage
+    const spotifyToken = localStorage.getItem('spotify_access_token');
+
+    // Determinazione del ruolo dell'utente corrente all'interno della stanza
+    // Nota: roomCreator deve essere esposto dall'hook useRoom se non è già tra le props. 
+    // Assumiamo di calcolarlo dal primo utente connesso o dal db, qui simulato tramite logica esistente
+    const isHost = onlineUsers.length > 0 && onlineUsers[0].user_email === session.user.email;
+
     const { roomStats, personalStats, fetchStats } = useStats(session, roomName);
 
     const {
@@ -35,8 +45,6 @@ export default function Room({
         }
     });
 
-    // EFFETTO DI SBLOCCO CARICAMENTO
-    // Quando la stanza riceve il nome e i settaggi, fa sparire la schermata di caricamento di App.jsx
     useEffect(() => {
         if (roomName && roomSettings && setIsLoading) {
             const timer = setTimeout(() => setIsLoading(false), 600);
@@ -50,7 +58,7 @@ export default function Room({
     };
 
     const handleExitRoom = async () => {
-        if (setIsLoading) setIsLoading(true); // Riattiva l'overlay prima di calcolare l'uscita
+        if (setIsLoading) setIsLoading(true);
 
         if (onlineUsers.length <= 1 && isRunning) {
             await pauseTimer();
@@ -91,13 +99,12 @@ export default function Room({
 
     return (
         <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
-            {/* HEADER STANZA */}
             <header className="p-4 sm:p-6 flex justify-between items-center border-b border-white/10 bg-black/40">
                 <h2 className="text-xl sm:text-3xl font-bold tracking-wider flex items-center gap-3">
                     <span className="text-red-500">📍</span> {roomName}
                 </h2>
                 <button
-                    onClick={handleExitRoom} // <-- Sostituisci onLeave con handleExitRoom
+                    onClick={handleExitRoom}
                     className="px-4 py-2 bg-white/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-xl font-bold transition-all border border-transparent hover:border-red-500/50"
                 >
                     Esci dalla Stanza
@@ -106,16 +113,12 @@ export default function Room({
 
             <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-10">
 
-                {/* COLONNA SINISTRA: TIMER */}
                 <div className="lg:col-span-2 flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-3xl p-8 sm:p-12 relative overflow-hidden">
-
-                    {/* Barra di progresso in background */}
                     <div
                         className={`absolute bottom-0 left-0 w-full opacity-10 transition-all duration-1000 ${mode === 'study' ? 'bg-red-500' : 'bg-emerald-500'}`}
                         style={{ height: `${progressPercentage}%` }}
                     />
 
-                    {/* Toggle Modalità */}
                     <div className="flex bg-black/40 rounded-full p-1 border border-white/10 mb-10 z-10 relative">
                         <button
                             onClick={() => switchMode('study')}
@@ -133,13 +136,10 @@ export default function Room({
                         </button>
                     </div>
 
-                    
-                    {/* Orologio Gigante */}
                     <div className="text-[6rem] sm:text-[9rem] font-black tracking-tighter tabular-nums drop-shadow-2xl z-10 relative leading-none mb-10">
                         {formatTime(timeLeft)}
                     </div>
 
-                    {/* Controlli Timer */}
                     <div className="flex items-center gap-4 z-10 relative">
                         <button
                             onClick={toggleTimer}
@@ -171,16 +171,19 @@ export default function Room({
                     </div>
                 </div>
 
-                {/* COLONNA DESTRA: SIDEBAR (Utenti e Statistiche) */}
                 <div className="flex flex-col gap-6">
-                    {/* Ciliegino della Stanza (Mascotte) */}
+                    {/* INSERIMENTO COMPONENTE SPOTIFY */}
+                    <SpotifyPlayer
+                        token={spotifyToken}
+                        roomName={roomName}
+                        isHost={isHost}
+                    />
+
                     <div className="bg-white/5 backdrop-blur-xl p-7 rounded-3xl border border-white/10 shadow-xl relative overflow-hidden">
                         <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
-
                         <h3 className="text-sm font-bold text-neutral-400 mb-5 border-b border-white/10 pb-3 uppercase tracking-widest">
                             Ciliegino della Stanza
                         </h3>
-
                         <div className="flex flex-col items-center justify-center text-center">
                             <div className="text-6xl mb-3 filter drop-shadow-xl animate-bounce" style={{ animationDuration: '3s' }}>
                                 {mascot.visual}
@@ -191,14 +194,12 @@ export default function Room({
                             <div className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1 mb-5">
                                 Livello {mascot.level}
                             </div>
-
                             <div className="w-full bg-black/40 rounded-full h-3 border border-white/5 shadow-inner relative overflow-hidden">
                                 <div
                                     className="bg-gradient-to-r from-red-600 to-red-400 h-full rounded-full transition-all duration-1000 ease-out"
                                     style={{ width: `${mascot.progress}%` }}
                                 ></div>
                             </div>
-
                             <div className="flex justify-between w-full mt-2 text-xs font-medium text-neutral-500">
                                 <span>{mascot.xp} XP</span>
                                 <span>{mascot.isMaxLevel ? 'MAX' : `${mascot.nextXp} XP`}</span>
@@ -206,7 +207,6 @@ export default function Room({
                         </div>
                     </div>
 
-                    {/* Utenti Online */}
                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
                         <h3 className="text-neutral-400 font-bold uppercase tracking-widest text-sm mb-4 border-b border-white/10 pb-2 flex justify-between items-center">
                             Compagni di Studio
@@ -229,7 +229,6 @@ export default function Room({
                         </div>
                     </div>
 
-                    {/* Statistiche Stanza */}
                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6 flex-1">
                         <h3 className="text-neutral-400 font-bold uppercase tracking-widest text-sm mb-4 border-b border-white/10 pb-2">
                             Rendimento della Stanza
@@ -245,9 +244,7 @@ export default function Room({
                             </div>
                         </div>
                     </div>
-
                 </div>
-
             </div>
 
             {showSettings && (

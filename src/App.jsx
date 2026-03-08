@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Auth from './Auth';
 import Lobby from './views/Lobby';
 import Room from './views/Room';
 import { useAuth } from './hooks/useAuth';
 import { useProfile } from './hooks/useProfile';
 import { useRoom } from './hooks/useRoom';
+import { refreshSpotifyToken } from './utils/spotify'; // Importa la nuova funzione
 
 export default function App() {
     const { session, loading: authLoading, signOut } = useAuth();
     const { profile, setProfile, saveProfile, loading: profileLoading } = useProfile(session);
-
-    // Nuovo stato per la transizione
     const [appLoading, setAppLoading] = useState(false);
+    const [spotifyConnected, setSpotifyConnected] = useState(!!localStorage.getItem('spotify_access_token'));
+
 
     const {
         rooms,
@@ -24,7 +25,95 @@ export default function App() {
         updateRoomSettingsInDb
     } = useRoom(session, profile);
 
-    // Funzioni wrapper per gestire l'inizio e la fine del caricamento
+    // Primo useEffect: Gestisce il rinnovo automatico a prova di background
+    useEffect(() => {
+        const handleVisibilityAndRefresh = async () => {
+            const refreshToken = localStorage.getItem('spotify_refresh_token');
+            const expiresAt = localStorage.getItem('spotify_token_expires_at');
+
+            if (!refreshToken || !expiresAt) return;
+
+            // Imposta un margine di sicurezza di 5 minuti (300.000 ms)
+            const buffer = 300000;
+            if (Date.now() > (parseInt(expiresAt) - buffer)) {
+                await refreshSpotifyToken();
+            }
+        };
+
+        // Ascolta quando l'utente torna fisicamente sulla scheda del browser
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                handleVisibilityAndRefresh();
+            }
+        });
+
+        // Un timer breve (1 minuto) che controlla il timestamp assoluto.
+        // Anche se il browser lo rallenta in background, calcolerà l'ora esatta al suo risveglio.
+        const interval = setInterval(handleVisibilityAndRefresh, 60000);
+
+        handleVisibilityAndRefresh();
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityAndRefresh);
+            clearInterval(interval);
+        };
+    }, []);
+
+
+    // Secondo useEffect: Gestisce il login iniziale e salva il timestamp di partenza
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const codeVerifier = localStorage.getItem('spotify_code_verifier');
+
+        if (!code || !codeVerifier) {
+            setAppLoading(false);
+            return;
+        }
+
+        const fetchSpotifyToken = async () => {
+            setAppLoading(true);
+            const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const redirectUri = isLocal
+                ? 'http://127.0.0.1:5173/callback'
+                : 'https://cilieginofocus.netlify.app/callback';
+
+            try {
+                const response = await fetch('https://accounts.spotify.com/api/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        client_id: clientId,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: redirectUri,
+                        code_verifier: codeVerifier,
+                    }),
+                });
+
+                const data = await response.json();
+                if (data.access_token) {
+                    localStorage.setItem('spotify_access_token', data.access_token);
+                    localStorage.setItem('spotify_refresh_token', data.refresh_token);
+
+                    // Calcolo e salvataggio del timestamp assoluto al primo login
+                    const expireTime = Date.now() + (data.expires_in * 1000);
+                    localStorage.setItem('spotify_token_expires_at', expireTime.toString());
+
+                    localStorage.removeItem('spotify_code_verifier');
+                }
+            } catch (error) {
+                console.error("Errore Spotify:", error);
+            } finally {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setAppLoading(false);
+            }
+        };
+
+        fetchSpotifyToken();
+    }, []);
+
     const handleJoinRoom = async (name) => {
         setAppLoading(true);
         await joinRoom(name);
@@ -33,15 +122,13 @@ export default function App() {
     const handleLeaveRoom = () => {
         setAppLoading(true);
         leaveRoom();
-        setTimeout(() => setAppLoading(false), 600); // Spegne il loading una volta tornati in Lobby
+        setTimeout(() => setAppLoading(false), 600);
     };
 
-    // Variabile booleana: se uno qualsiasi di questi è vero, mostriamo la maschera
     const showLoading = authLoading || (session && profileLoading) || appLoading;
 
     return (
         <>
-            {/* OVERLAY DI CARICAMENTO: Sta sopra a tutto senza bloccare il rendering */}
             {showLoading && (
                 <div className="fixed inset-0 z-[100] bg-[#09090b] flex items-center justify-center text-white transition-opacity duration-300">
                     <div className="relative flex flex-col items-center gap-6">
@@ -56,7 +143,6 @@ export default function App() {
                 </div>
             )}
 
-            {/* ROUTING PRINCIPALE */}
             {!session ? (
                 <Auth />
             ) : !currentRoom ? (
@@ -79,7 +165,7 @@ export default function App() {
                     onlineUsers={onlineUsers}
                     onLeave={handleLeaveRoom}
                     updateRoomSettingsInDb={updateRoomSettingsInDb}
-                    setIsLoading={setAppLoading} // Passaggio fondamentale del setter
+                    setIsLoading={setAppLoading}
                 />
             )}
         </>
