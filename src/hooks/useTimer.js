@@ -121,33 +121,20 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
 
     const toggleTimer = async () => {
         const newIsRunning = !isRunning;
-        setIsRunning(newIsRunning);
-
         let newTarget = null;
         let newPausedSec = pausedRemainingSec;
 
         if (newIsRunning) {
-            // Calcola il target
             newTarget = new Date(Date.now() + pausedRemainingSec * 1000).toISOString();
-            setTargetEndTime(newTarget);
-
-            // AGGIUNTA FONDAMENTALE: 
-            // Forza l'aggiornamento visivo immediato per azzerare il lag del Worker.
-            // Invece di aspettare il primo postMessage, diciamo a React: "Il tempo rimanente è esattamente quello di pausa".
-            setTimeLeft(pausedRemainingSec);
-
         } else {
             const remaining = targetEndTime
                 ? Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000))
                 : pausedRemainingSec;
-
             newPausedSec = remaining;
-            setPausedRemainingSec(remaining);
-            setTimeLeft(remaining);
-            setTargetEndTime(null);
         }
 
-        // Invia al server (non bloccare l'UI)
+        // Invia esclusivamente il comando al database.
+        // Nessun aggiornamento di stato locale (non inserire setIsRunning, setTargetEndTime o setTimeLeft qui).
         await supabase.from('pomodoro_sessions').update({
             is_running: newIsRunning,
             target_end_time: newTarget,
