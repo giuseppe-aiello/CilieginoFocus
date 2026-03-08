@@ -68,47 +68,47 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
 
         initializeTimer();
 
-        // 3. SINCRONIZZAZIONE REALTIME E INITIALIZE
+        // Cerca il blocco timerSubscription e modificalo così:
+
         const timerSubscription = supabase.channel(`timer-${currentRoom}`)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pomodoro_sessions', filter: `room_name=eq.${currentRoom}` }, (payload) => {
                 const newData = payload.new;
-                setMode(newData.mode || 'study');
-                setIsRunning(newData.is_running);
-                setTargetEndTime(newData.target_end_time);
-                setPausedRemainingSec(newData.paused_remaining_sec);
 
-                // Se non sta girando, mostra i secondi di pausa nominali
-                if (!newData.is_running) {
-                    setTimeLeft(newData.paused_remaining_sec);
-                } else if (newData.target_end_time) {
-                    // Se sta girando (es. rientro in pagina), calcola visivamente dove si trova
-                    const remaining = Math.max(0, Math.ceil((new Date(newData.target_end_time).getTime() - Date.now()) / 1000));
-                    setTimeLeft(remaining);
-                }
+                setMode(newData.mode || 'study');
+                setTargetEndTime(newData.target_end_time);
+
+                // Imposta immediatamente il valore netto per tutti (es. 1500)
+                setPausedRemainingSec(newData.paused_remaining_sec);
+                setTimeLeft(newData.paused_remaining_sec);
+
+                // L'attivazione di isRunning innesca l'useEffect del Worker qui sopra
+                setIsRunning(newData.is_running);
             })
             .subscribe();
+            
         return () => {
             supabase.removeChannel(timerSubscription);
         };
     }, [currentRoom]);
 
 
-    // 1. GESTIONE INVIO AL WORKER
-    useEffect(() => {
-        if (isRunning && targetEndTime) {
-            // Calcola i secondi esatti mancanti in QUESTO preciso istante
-            // Questo protegge i "late joiners" e chi subisce lag di rete
-            const currentRemaining = Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000));
+    // Cerca questo blocco e modificalo così:
 
+    useEffect(() => {
+        if (isRunning) {
+            // Nessun calcolo assoluto. Passiamo il numero intero (es. 1500).
+            // Il Web Worker di ogni dispositivo calcolerà il proprio traguardo 
+            // basandosi esclusivamente sul proprio orologio interno, azzerando il Clock Skew.
             workerRef.current.postMessage({
                 command: 'start',
-                remainingSec: currentRemaining
+                remainingSec: pausedRemainingSec
             });
         } else {
             workerRef.current.postMessage({ command: 'stop' });
             setTimeLeft(pausedRemainingSec);
         }
-    }, [isRunning, targetEndTime, pausedRemainingSec]);
+    }, [isRunning, pausedRemainingSec]); // Rimosso targetEndTime dalle dipendenze
+
 
 
     const switchMode = async (newMode) => {
