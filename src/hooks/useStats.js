@@ -6,23 +6,58 @@ export const useStats = (session, currentRoom) => {
     const [roomStats, setRoomStats] = useState({ pomodoros: 0, totalSeconds: 0 });
     const [globalStats, setGlobalStats] = useState({ pomodoros: 0, totalSeconds: 0 });
 
+
+    const [dailyStats, setDailyStats] = useState({});
+
     // Funzione di utilità interna per calcolare i totali
     const calcStats = (data) => ({
         pomodoros: data ? data.length : 0,
         totalSeconds: data ? data.reduce((acc, curr) => acc + curr.duration_seconds, 0) : 0
     });
 
-    // Recupera le statistiche totali dell'utente (usato nella Lobby)
     const fetchGlobalStats = useCallback(async () => {
         if (!session?.user) return;
 
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('study_history')
-            .select('duration_seconds')
+            .select('duration_seconds, completed_at')
             .eq('user_id', session.user.id);
 
-        setGlobalStats(calcStats(data));
-    }, [session]);
+        if (error) {
+            console.error("Errore recupero stats:", error);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            let totalSecs = 0;
+            const aggregatedDaily = {};
+
+            data.forEach(record => {
+                totalSecs += record.duration_seconds;
+
+                const d = new Date(record.completed_at);
+                if (!isNaN(d.getTime())) {
+                    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+                    // Crea la struttura a oggetto per il calendario
+                    if (!aggregatedDaily[dateKey]) {
+                        aggregatedDaily[dateKey] = { seconds: 0, count: 0 };
+                    }
+                    aggregatedDaily[dateKey].seconds += record.duration_seconds;
+                    aggregatedDaily[dateKey].count += 1;
+                }
+            });
+
+            setGlobalStats({
+                pomodoros: data.length,
+                totalSeconds: totalSecs
+            });
+            setDailyStats(aggregatedDaily);
+        } else {
+            setGlobalStats({ pomodoros: 0, totalSeconds: 0 });
+            setDailyStats({});
+        }
+    }, [session?.user?.id]);
 
     // Recupera le statistiche contestuali alla stanza corrente
     const fetchStats = useCallback(async () => {
@@ -39,7 +74,7 @@ export const useStats = (session, currentRoom) => {
         // Storico collettivo della stanza
         const { data: roomData } = await supabase
             .from('study_history')
-            .select('duration_seconds')
+            .select('duration_seconds','cycle_id')
             .eq('room_name', currentRoom);
         if (roomData) {
             // Usiamo una Mappa: se 5 utenti hanno inserito lo stesso cycle_id, 
@@ -85,6 +120,7 @@ export const useStats = (session, currentRoom) => {
         personalStats,
         roomStats,
         globalStats,
+        dailyStats,
         fetchStats,
         fetchGlobalStats
     };

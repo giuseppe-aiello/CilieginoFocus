@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // 1. Aggiunto useEffect qui
 import Navbar from '../components/Navbar';
 import PixelAvatar from '../components/PixelAvatar';
 import { PIXEL_FRUITS } from '../utils/pixelArt';
 import { useStats } from '../hooks/useStats';
+import StudyHeatmap from '../components/StudyHeatmap';
 
 export default function Lobby({
     session,
@@ -17,7 +18,8 @@ export default function Lobby({
     const [newRoomName, setNewRoomName] = useState('');
     const [isEditingProfile, setIsEditingProfile] = useState(false);
 
-    const { globalStats } = useStats(session, null);
+    // 2. Estratta anche la funzione fetchGlobalStats dall'hook
+    const { globalStats, dailyStats, fetchGlobalStats } = useStats(session, null);
 
     const handleJoin = (e) => {
         e.preventDefault();
@@ -31,6 +33,10 @@ export default function Lobby({
         await saveProfile();
         setIsEditingProfile(false);
     };
+
+    useEffect(() => {
+        fetchGlobalStats();
+    }, [fetchGlobalStats]);
 
     return (
         <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
@@ -98,14 +104,22 @@ export default function Lobby({
                         <div className="flex flex-col gap-4">
                             <div className="bg-black/40 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
                                 <span className="text-neutral-400 font-bold">Pomodori Totali</span>
-                                <span className="text-2xl font-black text-red-500">{globalStats.pomodoros}</span>
+                                <span className="text-2xl font-black text-red-500">
+                                    {globalStats?.pomodoros || 0}
+                                </span>
                             </div>
                             <div className="bg-black/40 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
                                 <span className="text-neutral-400 font-bold">Minuti di Studio</span>
-                                <span className="text-2xl font-black text-emerald-500">{Math.floor(globalStats.totalSeconds / 60)}</span>
+                                <span className="text-2xl font-black text-emerald-500">
+                                    {Math.floor((globalStats?.totalSeconds || 0) / 60)}
+                                </span>
                             </div>
                         </div>
                     </div>
+
+                    {/* 4. AGGIUNTO IL CALENDARIO HEATMAP QUI */}
+                    <StudyHeatmap dailyData={dailyStats} />
+
                 </div>
 
                 {/* COLONNA DESTRA: STANZE */}
@@ -168,7 +182,6 @@ export default function Lobby({
                         </div>
                     </div>
                 </div>
-
             </main>
         </div>
     );
