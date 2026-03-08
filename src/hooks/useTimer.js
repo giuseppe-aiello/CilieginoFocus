@@ -74,12 +74,8 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
                 setTargetEndTime(newData.target_end_time);
                 setPausedRemainingSec(newData.paused_remaining_sec);
 
-                if (newData.is_running && newData.target_end_time) {
-                    const remaining = Math.max(0, Math.ceil((new Date(newData.target_end_time).getTime() - Date.now()) / 1000));
-                    setTimeLeft(remaining);
-                } else {
-                    setTimeLeft(newData.paused_remaining_sec);
-                }
+                // Allinea visivamente tutti i client sul tempo esatto di partenza/pausa
+                setTimeLeft(newData.paused_remaining_sec);
             })
             .subscribe();
 
