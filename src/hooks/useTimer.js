@@ -53,19 +53,22 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
                 setMode(data.mode || 'study');
                 setIsRunning(data.is_running);
                 setTargetEndTime(data.target_end_time);
-                setPausedRemainingSec(data.paused_remaining_sec);
 
                 if (data.is_running && data.target_end_time) {
+                    // Ricalcola i secondi per chi entra a timer già avviato
                     const remaining = Math.max(0, Math.ceil((new Date(data.target_end_time).getTime() - Date.now()) / 1000));
                     setTimeLeft(remaining);
+                    setPausedRemainingSec(remaining); // Imposta il punto di partenza locale per il Worker
                 } else {
                     setTimeLeft(data.paused_remaining_sec);
+                    setPausedRemainingSec(data.paused_remaining_sec);
                 }
             }
         };
 
         initializeTimer();
 
+        // 3. SINCRONIZZAZIONE REALTIME E INITIALIZE
         const timerSubscription = supabase.channel(`timer-${currentRoom}`)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pomodoro_sessions', filter: `room_name=eq.${currentRoom}` }, (payload) => {
                 const newData = payload.new;
@@ -74,24 +77,34 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
                 setTargetEndTime(newData.target_end_time);
                 setPausedRemainingSec(newData.paused_remaining_sec);
 
-                // Allinea visivamente tutti i client sul tempo esatto di partenza/pausa
-                setTimeLeft(newData.paused_remaining_sec);
+                // Se non sta girando, mostra i secondi di pausa nominali
+                if (!newData.is_running) {
+                    setTimeLeft(newData.paused_remaining_sec);
+                } else if (newData.target_end_time) {
+                    // Se sta girando (es. rientro in pagina), calcola visivamente dove si trova
+                    const remaining = Math.max(0, Math.ceil((new Date(newData.target_end_time).getTime() - Date.now()) / 1000));
+                    setTimeLeft(remaining);
+                }
             })
             .subscribe();
-
         return () => {
             supabase.removeChannel(timerSubscription);
         };
     }, [currentRoom]);
 
 
-    // 3. INVIO COMANDI AL WORKER QUANDO LO STATO CAMBIA
+    // 1. GESTIONE INVIO AL WORKER
     useEffect(() => {
         if (isRunning && targetEndTime) {
-            // Ordina al worker di iniziare a contare in background
-            workerRef.current.postMessage({ command: 'start', targetEndTime });
+            // Calcola i secondi esatti mancanti in QUESTO preciso istante
+            // Questo protegge i "late joiners" e chi subisce lag di rete
+            const currentRemaining = Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000));
+
+            workerRef.current.postMessage({
+                command: 'start',
+                remainingSec: currentRemaining
+            });
         } else {
-            // Ordina al worker di fermarsi
             workerRef.current.postMessage({ command: 'stop' });
             setTimeLeft(pausedRemainingSec);
         }
@@ -115,6 +128,7 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
         }).eq('room_name', currentRoom);
     };
 
+    // 2. FUNZIONE DI PAUSA/AVVIO (toggleTimer)
     const toggleTimer = async () => {
         const newIsRunning = !isRunning;
         let newTarget = null;
@@ -123,14 +137,14 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
         if (newIsRunning) {
             newTarget = new Date(Date.now() + pausedRemainingSec * 1000).toISOString();
         } else {
+            // Usa rigorosamente il target_end_time assoluto per calcolare i secondi da salvare
             const remaining = targetEndTime
                 ? Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000))
                 : pausedRemainingSec;
             newPausedSec = remaining;
         }
 
-        // Invia esclusivamente il comando al database.
-        // Nessun aggiornamento di stato locale (non inserire setIsRunning, setTargetEndTime o setTimeLeft qui).
+        // Invia al DB senza toccare stati locali per evitare desync
         await supabase.from('pomodoro_sessions').update({
             is_running: newIsRunning,
             target_end_time: newTarget,
@@ -138,6 +152,7 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
             last_updated_at: new Date()
         }).eq('room_name', currentRoom);
     };
+
 
     const resetTimer = async () => {
         setIsRunning(false);
