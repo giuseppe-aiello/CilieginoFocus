@@ -119,18 +119,21 @@ export default function Room({
                     <div className="flex bg-black/40 rounded-full p-1 border border-white/10 mb-10 z-10 relative">
                         <button
                             onClick={() => switchMode('study')}
-                            className={`px-8 py-3 rounded-full font-bold transition-all ${mode === 'study' ? 'bg-red-500 shadow-lg scale-105' : 'text-neutral-400 hover:text-white'}`}
+                            disabled={isRunning}
+                            className={`px-8 py-3 rounded-full font-bold transition-all ${mode === 'study' ? 'bg-red-500 shadow-lg scale-105' : 'text-neutral-400 hover:text-white'} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             Studio
                         </button>
                         <button
                             onClick={() => switchMode('break')}
-                            className={`px-8 py-3 rounded-full font-bold transition-all ${mode === 'break' ? 'bg-emerald-500 shadow-lg scale-105' : 'text-neutral-400 hover:text-white'}`}
+                            disabled={isRunning}
+                            className={`px-8 py-3 rounded-full font-bold transition-all ${mode === 'break' ? 'bg-emerald-500 shadow-lg scale-105' : 'text-neutral-400 hover:text-white'} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             Pausa
                         </button>
                     </div>
 
+                    
                     {/* Orologio Gigante */}
                     <div className="text-[6rem] sm:text-[9rem] font-black tracking-tighter tabular-nums drop-shadow-2xl z-10 relative leading-none mb-10">
                         {formatTime(timeLeft)}
@@ -150,7 +153,8 @@ export default function Room({
 
                         <button
                             onClick={resetTimer}
-                            className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-xl transition-all active:scale-95"
+                            disabled={isRunning}
+                            className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-xl transition-all ${isRunning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20 active:scale-95'}`}
                             title="Resetta Timer"
                         >
                             🔄
@@ -158,7 +162,8 @@ export default function Room({
 
                         <button
                             onClick={() => setShowSettings(true)}
-                            className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-xl transition-all active:scale-95"
+                            disabled={isRunning}
+                            className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-xl transition-all ${isRunning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20 active:scale-95'}`}
                             title="Impostazioni"
                         >
                             ⚙️
