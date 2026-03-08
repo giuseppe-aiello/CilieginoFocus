@@ -127,8 +127,15 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
         let newPausedSec = pausedRemainingSec;
 
         if (newIsRunning) {
+            // Calcola il target
             newTarget = new Date(Date.now() + pausedRemainingSec * 1000).toISOString();
             setTargetEndTime(newTarget);
+
+            // AGGIUNTA FONDAMENTALE: 
+            // Forza l'aggiornamento visivo immediato per azzerare il lag del Worker.
+            // Invece di aspettare il primo postMessage, diciamo a React: "Il tempo rimanente è esattamente quello di pausa".
+            setTimeLeft(pausedRemainingSec);
+
         } else {
             const remaining = targetEndTime
                 ? Math.max(0, Math.ceil((new Date(targetEndTime).getTime() - Date.now()) / 1000))
@@ -140,6 +147,7 @@ export const useTimer = (session, currentRoom, roomSettings, onTimerComplete) =>
             setTargetEndTime(null);
         }
 
+        // Invia al server (non bloccare l'UI)
         await supabase.from('pomodoro_sessions').update({
             is_running: newIsRunning,
             target_end_time: newTarget,
