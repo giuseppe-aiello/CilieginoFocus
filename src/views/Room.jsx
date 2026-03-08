@@ -12,10 +12,10 @@ export default function Room({
     roomSettings,
     onlineUsers,
     onLeave,
-    updateRoomSettingsInDb
+    updateRoomSettingsInDb,
+    setIsLoading // <-- RECUPERATO DALLE PROPS
 }) {
     const [showSettings, setShowSettings] = useState(false);
-
     const { roomStats, personalStats, fetchStats } = useStats(session, roomName);
 
     const {
@@ -25,37 +25,42 @@ export default function Room({
         toggleTimer,
         resetTimer,
         switchMode,
-        pauseTimer, // funzione per pausa quando stanza vuota
+        pauseTimer,
         setPausedRemainingSec,
         setTimeLeft
     } = useTimer(session, roomName, roomSettings, (completedMode, autoStarted) => {
-    // ... (resto invariato)
         fetchStats();
         if (!autoStarted) {
             alert(completedMode === 'study' ? "Sessione completata! Inizia la pausa." : "Pausa terminata! Torna a studiare.");
         }
     });
 
+    // EFFETTO DI SBLOCCO CARICAMENTO
+    // Quando la stanza riceve il nome e i settaggi, fa sparire la schermata di caricamento di App.jsx
+    useEffect(() => {
+        if (roomName && roomSettings && setIsLoading) {
+            const timer = setTimeout(() => setIsLoading(false), 600);
+            return () => clearTimeout(timer);
+        }
+    }, [roomName, roomSettings, setIsLoading]);
+
     const applyAndSaveSettings = async (draftSettings) => {
-        // Salva le nuove impostazioni nel database senza modificare il timeLeft o il pausedRemainingSec attuali
         await updateRoomSettingsInDb(draftSettings, isRunning ? pausedRemainingSec : timeLeft);
         setShowSettings(false);
     };
 
-    // Gestisce l'uscita tramite il bottone
     const handleExitRoom = async () => {
-        // Se c'è solo un utente (o zero) e il timer sta scorrendo, metti in pausa
+        if (setIsLoading) setIsLoading(true); // Riattiva l'overlay prima di calcolare l'uscita
+
         if (onlineUsers.length <= 1 && isRunning) {
             await pauseTimer();
         }
         onLeave();
     };
 
-    // Gestisce la chiusura improvvisa della scheda/browser
     useEffect(() => {
         const handleBeforeUnload = () => {
             if (onlineUsers.length <= 1 && isRunning) {
-                // Invia una richiesta "fire-and-forget" al database per mettere in pausa
                 supabase.from('pomodoro_sessions').update({
                     is_running: false,
                     target_end_time: null,
@@ -82,10 +87,8 @@ export default function Room({
         ? ((roomSettings.studyDurationSec - timeLeft) / roomSettings.studyDurationSec) * 100
         : ((roomSettings.breakDurationSec - timeLeft) / roomSettings.breakDurationSec) * 100;
 
-    // Genera lo stato corrente della mascotte passando i secondi della stanza
     const mascot = getMascotStage(roomStats.totalSeconds);
 
-        
     return (
         <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
             {/* HEADER STANZA */}

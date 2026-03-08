@@ -114,18 +114,18 @@ export default function Lobby({
                         <h2 className="text-2xl font-bold mb-2">Entra in una Stanza</h2>
                         <p className="text-neutral-400 mb-8">Unisciti ai tuoi compagni o crea un nuovo ambiente di studio inserendo un nome.</p>
 
-                        <form onSubmit={handleJoin} className="flex gap-3 mb-10">
+                        <form onSubmit={handleJoin} className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-10">
                             <input
                                 type="text"
                                 value={newRoomName}
                                 onChange={(e) => setNewRoomName(e.target.value)}
                                 placeholder="es. Analisi Matematica"
-                                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium placeholder-neutral-600 transition-all"
+                                className="w-full sm:flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-4 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium placeholder-neutral-600 transition-all"
                                 required
                             />
                             <button
                                 type="submit"
-                                className="px-8 bg-white text-black hover:bg-neutral-200 font-black rounded-xl transition-all active:scale-95 shadow-xl"
+                                className="w-full sm:w-auto px-8 py-4 sm:py-0 bg-white text-black hover:bg-neutral-200 font-black rounded-xl transition-all active:scale-95 shadow-xl flex items-center justify-center"
                             >
                                 Entra
                             </button>
