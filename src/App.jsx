@@ -76,8 +76,8 @@ export default function App() {
             const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
             const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             const redirectUri = isLocal
-                ? 'http://127.0.0.1:5173/callback'
-                : 'https://cilieginofocus.netlify.app/callback';
+                ? 'http://127.0.0.1:5173/'
+                : 'https://cilieginofocus.netlify.app/';
 
             try {
                 const response = await fetch('https://accounts.spotify.com/api/token', {
